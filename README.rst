@@ -4,6 +4,9 @@ Dataclasses JSON Schema
 .. image:: https://travis-ci.org/s-knibbs/dataclasses-jsonschema.svg?branch=master
     :target: https://travis-ci.org/s-knibbs/dataclasses-jsonschema
 
+.. image:: https://badge.fury.io/py/dataclasses-jsonschema.svg
+    :target: https://badge.fury.io/py/dataclasses-jsonschema
+
 JSON schema generation from python 3.7 dataclasses. Python 3.6 is supported through the dataclasses backport.
 Also provides serialisation to and from JSON data with JSON schema validation.
 

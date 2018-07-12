@@ -1,7 +1,5 @@
 from setuptools import setup
 
-version = "0.0.1"
-
 requires = [
     'python-dateutil',
     'jsonschema',
@@ -22,11 +20,11 @@ setup(
     author_email='simon.knibbs@gmail.com',
     url='https://github.com/s-knibbs/dataclasses-jsonschema',
     install_requires=requires,
-    setup_requires=['pytest-runner'],
+    setup_requires=['pytest-runner', 'setuptools_scm'],
     tests_require=['pytest', 'flake8', 'mypy'],
     license='MIT',
-    version=version,
-    classifiers=(
+    use_scm_version=True,
+    classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
@@ -34,5 +32,5 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Topic :: Software Development :: Libraries'
-    )
+    ]
 )
