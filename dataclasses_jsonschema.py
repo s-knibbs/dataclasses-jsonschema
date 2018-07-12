@@ -1,4 +1,4 @@
-from typing import Optional, Type, Union, Any, Dict
+from typing import Optional, Type, Union, Any, Dict, cast
 from datetime import datetime
 from dataclasses import fields
 from uuid import UUID
@@ -34,14 +34,18 @@ class FieldEncoder:
 
 
 class DateTimeFieldEncoder(FieldEncoder):
-    """Encodes datetimes to isoformat"""
+    """Encodes datetimes to RFC3339 format"""
 
     def to_wire(self, value: datetime) -> str:
-        return value.isoformat()
+        out = value.isoformat(timespec='seconds')
+
+        # Assume UTC if timezone is missing
+        if value.tzinfo is None:
+            return out + "Z"
+        return out
 
     def to_python(self, value: JsonEncodable) -> datetime:
-        assert isinstance(value, str)
-        return parse(value)
+        return parse(cast(str, value))
 
     @property
     def json_schema(self) -> JsonDict:
