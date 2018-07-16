@@ -45,7 +45,7 @@ class DateTimeFieldEncoder(FieldEncoder):
         return out
 
     def to_python(self, value: JsonEncodable) -> datetime:
-        return parse(cast(str, value))
+        return value if isinstance(value, datetime) else parse(cast(str, value))
 
     @property
     def json_schema(self) -> JsonDict:
@@ -127,12 +127,12 @@ class JsonSchemaMixin:
 
     @classmethod
     def _decode_field(cls, field: str, field_type: Any, value: Any, validate: bool):
-        if type(value) in JSON_ENCODABLE_TYPES or value is None:
+        if (type(value) in JSON_ENCODABLE_TYPES and field_type in JSON_ENCODABLE_TYPES) or value is None:
             return value
 
         # Replace any nested dictionaries with their targets
         if hasattr(field_type, 'from_dict'):
-            return field_type.from_dict(value)
+            return field_type.from_dict(value, validate)
         if str(type(field_type)) == 'typing.Union' and issubclass(field_type.__args__[1], type(None)):
             return cls._decode_field(field, field_type.__args__[0], value, validate)
         if field_type.__name__ in ('Mapping', 'Dict'):
@@ -247,6 +247,8 @@ class JsonSchemaMixin:
                 'required': required,
                 'properties': properties
             }
+            if len(required) == 0:
+                del schema["required"]
             if cls.__doc__:
                 schema['description'] = cls.__doc__
             cls.schema = schema
