@@ -56,4 +56,3 @@ TODO
 ----
 
 * Support type Union using 'oneOf'
-* Support NewType fields

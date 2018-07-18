@@ -1,4 +1,4 @@
-from typing import Optional, Type, Union, Any, Dict, cast
+from typing import Optional, Type, Union, Any, Dict, cast, Tuple
 from datetime import datetime
 from dataclasses import fields
 from uuid import UUID
@@ -19,14 +19,21 @@ JsonEncodable = Union[int, float, str, bool]
 JsonDict = Dict[str, Any]
 
 
+def is_enum(field_type: Any):
+    try:
+        return issubclass(field_type, Enum)
+    except TypeError:
+        return False
+
+
 class FieldEncoder:
     """Base class for encoding fields to and from JSON encodable values"""
 
     def to_wire(self, value: Any) -> JsonEncodable:
-        raise NotImplemented
+        return value
 
     def to_python(self, value: JsonEncodable) -> Any:
-        raise NotImplemented
+        return value
 
     @property
     def json_schema(self) -> JsonDict:
@@ -139,7 +146,9 @@ class JsonSchemaMixin:
             return {key: cls._decode_field(field, field_type.__args__[1], val, validate) for key, val in value.items()}
         if field_type.__name__ in ('Sequence', 'List'):
             return [cls._decode_field(field, field_type.__args__[0], val, validate) for val in value]
-        if issubclass(field_type, Enum):
+        if hasattr(field_type, "__supertype__"):  # NewType field
+            return cls._decode_field(field, field_type.__supertype__, value, validate)
+        if is_enum(field_type):
             try:
                 decoded = field_type(value)
             except ValueError:
@@ -148,8 +157,8 @@ class JsonSchemaMixin:
                 warnings.warn(f"Invalid enum value: {value}")
                 decoded = value
             return decoded
-        if type(value) in cls.field_encoders:
-            return cls.field_encoders[type(value)].to_python(value)
+        if field_type in cls.field_encoders:
+            return cls.field_encoders[field_type].to_python(value)
         warnings.warn(f"Unable to decode value for '{field}: {field_type.__name__}'")
         return value
 
@@ -165,11 +174,11 @@ class JsonSchemaMixin:
         return cls(**decoded_data)
 
     @classmethod
-    def _get_field_schema(cls, field_type):
-        field_schema = {}
+    def _get_field_schema(cls, field_type) -> Tuple[JsonDict, bool]:
+        field_schema: JsonDict = {'type': 'object'}
         required = True
         if hasattr(field_type, 'json_schema'):
-            field_schema: JsonDict = {
+            field_schema = {
                 'type': 'object',
                 '$ref': '#/definitions/{}'.format(field_type.__name__)
             }
@@ -178,7 +187,7 @@ class JsonSchemaMixin:
             if str(type(field_type)) == 'typing.Union' and issubclass(field_type.__args__[1], type(None)):
                 field_schema = cls._get_field_schema(field_type.__args__[0])[0]
                 required = False
-            elif issubclass(field_type, Enum):
+            elif is_enum(field_type):
                 member_types = set()
                 values = []
                 for member in field_type:
@@ -200,8 +209,12 @@ class JsonSchemaMixin:
                 field_schema = {'type': 'array', 'items': cls._get_field_schema(field_type.__args__[0])[0]}
             elif field_type in JSON_ENCODABLE_TYPES:
                 field_schema = JSON_ENCODABLE_TYPES[field_type]
-            else:
+            elif field_type in cls.field_encoders:
                 field_schema.update(cls.field_encoders[field_type].json_schema)
+            elif hasattr(field_type, '__supertype__'):  # NewType fields
+                field_schema, _ = cls._get_field_schema(field_type.__supertype__)
+            else:
+                warnings.warn(f"Unable to create schema for '{field_type.__name__}'")
         return field_schema, required
 
     @classmethod

@@ -12,7 +12,7 @@ FOO_SCHEMA = {
         'b': {'items': {'$ref': '#/definitions/Point', 'type': 'object'}, 'type': 'array'},
         'c': {'additionalProperties': {'format': 'integer', 'type': 'number'}, 'type': 'object'},
         'd': {'type': 'string', 'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']},
-        'e': {'type': 'string'}},
+        'e': {'type': 'string', 'minLength': 5, 'maxLength': 8}},
     'type': 'object',
     'required': ['a', 'b', 'c', 'd']
 }
@@ -36,7 +36,6 @@ def test_json_schema():
             '$schema': 'http://json-schema.org/draft-04/schema#'
         }
     }
-    print(Foo.json_schema())
     assert schema == Foo.json_schema()
 
 
@@ -48,11 +47,11 @@ def test_embeddable_json_schema():
 
 def test_serialise_deserialise():
     data = {
-        'a': '2018-06-03T12:00:00',
+        'a': '2018-06-03T12:00:00+00:00',
         'b': [{'z': 1.2, 'y': 1.5}],
         'c': {'Mon': 1, 'Tue': 2},
         'd': 'Wednesday',
-        'e': 'test'
+        'e': 'testing'
     }
     f = Foo.from_dict(data)
     assert data == f.to_dict()
@@ -61,3 +60,14 @@ def test_serialise_deserialise():
 def test_invalid_data():
     with pytest.raises(ValidationError):
         Point.from_dict({'z': 3.14, 'y': 'wrong'})
+
+
+def test_newtype_field_validation():
+    with pytest.raises(ValidationError):
+        Foo.from_dict({
+            'a': '2018-06-03T12:00:00+00:00',
+            'b': [{'z': 1.2, 'y': 1.5}],
+            'c': {'Mon': 1, 'Tue': 2},
+            'd': 'Wednesday',
+            'e': 't'
+        })

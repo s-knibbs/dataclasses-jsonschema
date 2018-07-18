@@ -1,9 +1,21 @@
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, NewType
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
 
-from dataclasses_jsonschema import JsonSchemaMixin
+from dataclasses_jsonschema import JsonSchemaMixin, FieldEncoder
+
+Postcode = NewType('Postcode', str)
+
+
+class PostcodeField(FieldEncoder):
+
+    @property
+    def json_schema(self):
+        return {'type': 'string', 'minLength': 5, 'maxLength': 8}
+
+
+JsonSchemaMixin.register_field_encoders({Postcode: PostcodeField()})
 
 
 class Weekday(Enum):
@@ -31,4 +43,4 @@ class Foo(JsonSchemaMixin):
     b: List[Point]
     c: Dict[str, int]
     d: Weekday
-    e: Optional[str] = None
+    e: Optional[Postcode] = None
