@@ -138,13 +138,14 @@ class JsonSchemaMixin:
             return value
 
         # Replace any nested dictionaries with their targets
+        field_type_name = cls._get_field_type_name(field_type)
         if hasattr(field_type, 'from_dict'):
             return field_type.from_dict(value, validate)
-        if str(type(field_type)) == 'typing.Union' and issubclass(field_type.__args__[1], type(None)):
+        if str(field_type).startswith('typing.Union') and issubclass(field_type.__args__[1], type(None)):
             return cls._decode_field(field, field_type.__args__[0], value, validate)
-        if field_type.__name__ in ('Mapping', 'Dict'):
+        if field_type_name in ('Mapping', 'Dict'):
             return {key: cls._decode_field(field, field_type.__args__[1], val, validate) for key, val in value.items()}
-        if field_type.__name__ in ('Sequence', 'List'):
+        if field_type_name in ('Sequence', 'List'):
             return [cls._decode_field(field, field_type.__args__[0], val, validate) for val in value]
         if hasattr(field_type, "__supertype__"):  # NewType field
             return cls._decode_field(field, field_type.__supertype__, value, validate)
@@ -159,7 +160,7 @@ class JsonSchemaMixin:
             return decoded
         if field_type in cls.field_encoders:
             return cls.field_encoders[field_type].to_python(value)
-        warnings.warn(f"Unable to decode value for '{field}: {field_type.__name__}'")
+        warnings.warn(f"Unable to decode value for '{field}: {field_type_name}'")
         return value
 
     @classmethod
@@ -177,14 +178,15 @@ class JsonSchemaMixin:
     def _get_field_schema(cls, field_type) -> Tuple[JsonDict, bool]:
         field_schema: JsonDict = {'type': 'object'}
         required = True
+        field_type_name = cls._get_field_type_name(field_type)
         if hasattr(field_type, 'json_schema'):
             field_schema = {
                 'type': 'object',
-                '$ref': '#/definitions/{}'.format(field_type.__name__)
+                '$ref': '#/definitions/{}'.format(field_type_name)
             }
         else:
             # If is optional[...]
-            if str(type(field_type)) == 'typing.Union' and issubclass(field_type.__args__[1], type(None)):
+            if str(field_type).startswith('typing.Union') and issubclass(field_type.__args__[1], type(None)):
                 field_schema = cls._get_field_schema(field_type.__args__[0])[0]
                 required = False
             elif is_enum(field_type):
@@ -200,12 +202,12 @@ class JsonSchemaMixin:
                     else:
                         field_schema.update(cls.field_encoders[member_types.pop()].json_schema)
                 field_schema['enum'] = values
-            elif field_type.__name__ in ('Dict', 'Mapping'):
+            elif field_type_name in ('Dict', 'Mapping'):
                 field_schema = {
                     'type': 'object',
                     'additionalProperties': cls._get_field_schema(field_type.__args__[1])[0]
                 }
-            elif field_type.__name__ in ('Sequence', 'List'):
+            elif field_type_name in ('Sequence', 'List'):
                 field_schema = {'type': 'array', 'items': cls._get_field_schema(field_type.__args__[0])[0]}
             elif field_type in JSON_ENCODABLE_TYPES:
                 field_schema = JSON_ENCODABLE_TYPES[field_type]
@@ -214,7 +216,7 @@ class JsonSchemaMixin:
             elif hasattr(field_type, '__supertype__'):  # NewType fields
                 field_schema, _ = cls._get_field_schema(field_type.__supertype__)
             else:
-                warnings.warn(f"Unable to create schema for '{field_type.__name__}'")
+                warnings.warn(f"Unable to create schema for '{field_type_name}'")
         return field_schema, required
 
     @classmethod
@@ -244,12 +246,13 @@ class JsonSchemaMixin:
                 mapped_field = cls.field_mapping().get(field, field)
                 properties[mapped_field], is_required = cls._get_field_schema(field_type)
                 item_type = field_type
+                field_type_name = cls._get_field_type_name(field_type)
                 # Note Optional is represented by Union[Type, None]
-                if str(type(field_type)) == 'typing.Union' and issubclass(field_type.__args__[1], type(None)):
+                if str(field_type).startswith('typing.Union') and issubclass(field_type.__args__[1], type(None)):
                     item_type = field_type.__args__[0]
-                elif field_type.__name__ in ('Dict', 'Mapping'):
+                elif field_type_name in ('Dict', 'Mapping'):
                     item_type = field_type.__args__[1]
-                elif field_type.__name__ in ('Sequence', 'List'):
+                elif field_type_name in ('Sequence', 'List'):
                     item_type = field_type.__args__[0]
                 if hasattr(item_type, 'json_schema'):
                     definitions.update(item_type.json_schema(embeddable=True))
@@ -274,3 +277,13 @@ class JsonSchemaMixin:
                 'definitions': definitions,
                 '$schema': 'http://json-schema.org/draft-04/schema#'
             }}
+
+    @staticmethod
+    def _get_field_type_name(field_type: Any) -> Optional[str]:
+        try:
+            return field_type.__name__
+        except AttributeError:
+            try:
+                return field_type._name
+            except AttributeError:
+                return None

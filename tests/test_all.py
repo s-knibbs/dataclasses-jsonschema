@@ -19,7 +19,7 @@ FOO_SCHEMA = {
 
 # Fixme: Fields in description no longer match
 POINT_SCHEMA = {
-    'description': 'Point(x:float, y:float)',
+    'description': Point.__doc__,
     'type': 'object',
     'properties': {
         'z': {'format': 'float', 'type': 'number'},
