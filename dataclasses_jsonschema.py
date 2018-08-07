@@ -21,10 +21,18 @@ JsonDict = Dict[str, Any]
 
 
 def is_enum(field_type: Any):
+    return issubclass_safe(field_type, Enum)
+
+
+def issubclass_safe(klass: Any, base: Type):
     try:
-        return issubclass(field_type, Enum)
+        return issubclass(klass, base)
     except TypeError:
         return False
+
+
+def is_optional(field: Any) -> bool:
+    return str(field).startswith('typing.Union') and issubclass(field.__args__[1], type(None))
 
 
 class FieldEncoder:
@@ -144,7 +152,7 @@ class JsonSchemaMixin:
         field_type_name = cls._get_field_type_name(field_type)
         if cls._is_json_schema_subclass(field_type):
             return field_type.from_dict(value, validate)
-        if str(field_type).startswith('typing.Union') and issubclass(field_type.__args__[1], type(None)):
+        if is_optional(field_type):
             return cls._decode_field(field, field_type.__args__[0], value, validate)
         if field_type_name in ('Mapping', 'Dict'):
             return {key: cls._decode_field(field, field_type.__args__[1], val, validate) for key, val in value.items()}
@@ -178,12 +186,9 @@ class JsonSchemaMixin:
                 decoded_data[field] = cls._decode_field(field, field_type, data.get(mapped_field), validate)
         return cls(**decoded_data)
 
-    @classmethod
-    def _is_json_schema_subclass(cls, field_type) -> bool:
-        try:
-            return issubclass(field_type, JsonSchemaMixin)
-        except TypeError:
-            return False
+    @staticmethod
+    def _is_json_schema_subclass(field_type) -> bool:
+        return issubclass_safe(field_type, JsonSchemaMixin)
 
     @classmethod
     def _get_field_schema(cls, field_type: Any) -> Tuple[JsonDict, bool]:
@@ -197,7 +202,7 @@ class JsonSchemaMixin:
             }
         else:
             # If is optional[...]
-            if str(field_type).startswith('typing.Union') and issubclass(field_type.__args__[1], type(None)):
+            if is_optional(field_type):
                 field_schema = cls._get_field_schema(field_type.__args__[0])[0]
                 required = False
             elif is_enum(field_type):
@@ -265,8 +270,7 @@ class JsonSchemaMixin:
                 properties[mapped_field], is_required = cls._get_field_schema(field_type)
                 item_type = field_type
                 field_type_name = cls._get_field_type_name(field_type)
-                # Note Optional is represented by Union[Type, None]
-                if str(field_type).startswith('typing.Union') and issubclass(field_type.__args__[1], type(None)):
+                if is_optional(field_type):
                     item_type = field_type.__args__[0]
                 elif field_type_name in ('Dict', 'Mapping'):
                     item_type = field_type.__args__[1]
