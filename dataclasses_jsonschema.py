@@ -219,12 +219,13 @@ class JsonSchemaMixin:
                         field_schema.update(cls._field_encoders[member_types.pop()].json_schema)
                 field_schema['enum'] = values
             elif field_type_name in ('Dict', 'Mapping'):
-                field_schema = {
-                    'type': 'object',
-                    'additionalProperties': cls._get_field_schema(field_type.__args__[1])[0]
-                }
+                field_schema = {'type': 'object'}
+                if field_type.__args__[1] is not Any:
+                    field_schema['additionalProperties'] = cls._get_field_schema(field_type.__args__[1])[0]
             elif field_type_name in ('Sequence', 'List'):
-                field_schema = {'type': 'array', 'items': cls._get_field_schema(field_type.__args__[0])[0]}
+                field_schema = {'type': 'array'}
+                if field_type.__args__[0] is not Any:
+                    field_schema['items'] = cls._get_field_schema(field_type.__args__[0])[0]
             elif field_type in JSON_ENCODABLE_TYPES:
                 field_schema = JSON_ENCODABLE_TYPES[field_type]
             elif field_type in cls._field_encoders:

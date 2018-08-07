@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, NewType
+from typing import Optional, List, Dict, NewType, Any
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
@@ -51,3 +51,10 @@ class Recursive(JsonSchemaMixin):
     """A recursive data-structure"""
     a: str
     b: Optional['Recursive'] = None
+
+
+@dataclass
+class OpaqueData(JsonSchemaMixin):
+    """Structure with unknown types"""
+    a: List[Any]
+    b: Dict[str, Any]

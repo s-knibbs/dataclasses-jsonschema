@@ -1,4 +1,4 @@
-from .conftest import Foo, Point, Recursive
+from .conftest import Foo, Point, Recursive, OpaqueData
 import pytest
 from jsonschema import ValidationError
 
@@ -38,6 +38,16 @@ RECURSIVE_SCHEMA = {
     'required': ['a']
 }
 
+OPAQUE_DATA_SCHEMA = {
+    "description": OpaqueData.__doc__,
+    "properties": {
+        'a': {'type': 'array'},
+        'b': {'type': 'object'}
+    },
+    'type': 'object',
+    'required': ['a', 'b']
+}
+
 
 def test_json_schema():
     definitions = {'Point': POINT_SCHEMA}
@@ -52,7 +62,8 @@ def test_json_schema():
 def test_embeddable_json_schema():
     expected = {'Point': POINT_SCHEMA, 'Foo': FOO_SCHEMA}
     assert expected == Foo.json_schema(embeddable=True)
-    expected = {'Point': POINT_SCHEMA, 'Foo': FOO_SCHEMA, 'Recursive': RECURSIVE_SCHEMA}
+    expected = {'Point': POINT_SCHEMA, 'Foo': FOO_SCHEMA,
+                'Recursive': RECURSIVE_SCHEMA, 'OpaqueData': OPAQUE_DATA_SCHEMA}
     assert expected == JsonSchemaMixin.json_schema()
 
 
