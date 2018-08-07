@@ -1,4 +1,4 @@
-from .conftest import Foo, Point
+from .conftest import Foo, Point, Recursive
 import pytest
 from jsonschema import ValidationError
 
@@ -28,6 +28,16 @@ POINT_SCHEMA = {
     'required': ['z', 'y']
 }
 
+RECURSIVE_SCHEMA = {
+    "description": Recursive.__doc__,
+    "properties": {
+        'a': {'type': 'string'},
+        'b': {'type': 'object', '$ref': '#/definitions/Recursive'}
+    },
+    'type': 'object',
+    'required': ['a']
+}
+
 
 def test_json_schema():
     definitions = {'Point': POINT_SCHEMA}
@@ -42,6 +52,7 @@ def test_json_schema():
 def test_embeddable_json_schema():
     expected = {'Point': POINT_SCHEMA, 'Foo': FOO_SCHEMA}
     assert expected == Foo.json_schema(embeddable=True)
+    expected = {'Point': POINT_SCHEMA, 'Foo': FOO_SCHEMA, 'Recursive': RECURSIVE_SCHEMA}
     assert expected == JsonSchemaMixin.json_schema()
 
 
@@ -71,3 +82,10 @@ def test_newtype_field_validation():
             'd': 'Wednesday',
             'e': 't'
         })
+
+
+def test_recursive_data():
+    data = {"a": "test", "b": {"a": "test2"}}
+    r = Recursive.from_dict(data)
+    assert r.a == "test"
+    assert r.to_dict() == data

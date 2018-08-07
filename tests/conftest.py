@@ -44,3 +44,10 @@ class Foo(JsonSchemaMixin):
     c: Dict[str, int]
     d: Weekday
     e: Optional[Postcode] = None
+
+
+@dataclass
+class Recursive(JsonSchemaMixin):
+    """A recursive data-structure"""
+    a: str
+    b: Optional['Recursive'] = None
