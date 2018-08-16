@@ -1,4 +1,4 @@
-from typing import Optional, Type, Union, Any, Dict, cast, Tuple, get_type_hints
+from typing import Optional, Type, Union, Any, Dict, cast, Tuple, get_type_hints, List
 
 from datetime import datetime
 from dataclasses import fields
@@ -90,6 +90,11 @@ class JsonSchemaMixin:
     # Cache of the generated schema
     _schema: Optional[JsonDict] = None
     _definitions: Optional[JsonDict] = None
+    _encode_cache: Any = None
+    _decode_cache: Any = None
+    # Cache of get_type_hints(cls)
+    _type_hints: Any = None
+    _mapped_fields: Optional[List[Tuple[str, str]]] = None
 
     @classmethod
     def field_mapping(cls) -> Dict[str, str]:
@@ -110,35 +115,59 @@ class JsonSchemaMixin:
         else:
             cls._field_encoders.update(field_encoders)
 
-    def _encode_field(self, value: Any, omit_none: bool) -> Any:
-        if type(value) in self._field_encoders:
-            return self._field_encoders[type(value)].to_wire(value)
-        elif isinstance(value, Enum):
-            return value.value
-        elif isinstance(value, dict):
-            return {self._encode_field(k, omit_none): self._encode_field(v, omit_none) for k, v in value.items()}
-        elif isinstance(value, (list, tuple)):
-            return type(value)(self._encode_field(v, omit_none) for v in value)
-        elif isinstance(value, JsonSchemaMixin):
-            # Only need to validate at the top level
-            return value.to_dict(omit_none=omit_none, validate=False)
-        else:
-            # TODO: Copy value?
+    def _encode_field(self, field_type: Any, value: Any, omit_none: bool) -> Any:
+        if value is None:
             return value
+        try:
+            encoder = self._encode_cache[field_type]
+        except KeyError:
+            field_type_name = self._get_field_type_name(field_type)
+            if field_type in self._field_encoders:
+                def encoder(ft, v, __): return self._field_encoders[ft].to_wire(v)
+            elif is_optional(field_type):
+                def encoder(ft, val, o): return self._encode_field(ft.__args__[0], val, o)
+            elif is_enum(field_type):
+                def encoder(_, v, __): return v.value
+            elif field_type_name in ('Mapping', 'Dict'):
+                def encoder(ft, val, o):
+                    return {
+                        self._encode_field(ft.__args__[0], k, o): self._encode_field(ft.__args__[1], v, o)
+                        for k, v in val.items()
+                    }
+            elif field_type_name in ('Sequence', 'List'):
+                def encoder(ft, val, o): return type(val)(self._encode_field(ft.__args__[0], v, o) for v in val)
+            elif self._is_json_schema_subclass(field_type):
+                # Only need to validate at the top level
+                def encoder(_, v, o): return v.to_dict(omit_none=o, validate=False)
+            else:
+                # TODO: Copy value?
+                def encoder(_, v, __): return v
+            self.__class__._encode_cache[field_type] = encoder  # type: ignore
+        return encoder(field_type, value, omit_none)
+
+    def _get_fields(self) -> List[Tuple[str, str]]:
+        if self._mapped_fields is None:
+            mapped_fields = []
+            for f in fields(self):
+                if f.name.startswith("_"):
+                    continue
+                mapped_fields.append((f.name, self.field_mapping().get(f.name, f.name)))
+            self.__class__._mapped_fields = mapped_fields  # type: ignore
+        return self._mapped_fields  # type: ignore
 
     def to_dict(self, omit_none: bool = True, validate: bool = False) -> JsonDict:
         """Converts the dataclass instance to a JSON encodable dict, with optional JSON schema validation.
 
         If omit_none (default True) is specified, any items with value None are removed
         """
+        if self._encode_cache is None:
+            self.__class__._encode_cache = {}  # type: ignore
         data = {}
-        for f in fields(self):
-            if f.name.startswith("_"):
-                continue
-            value = self._encode_field(getattr(self, f.name), omit_none)
+        for field, target_field in self._get_fields():
+            value = self._encode_field(self._get_type_hints()[field], getattr(self, field), omit_none)
             if omit_none and value is None:
                 continue
-            data[self.field_mapping().get(f.name, f.name)] = value
+            data[target_field] = value
         if validate:
             schema_validate(data, self.json_schema())
         return data
@@ -147,40 +176,44 @@ class JsonSchemaMixin:
     def _decode_field(cls, field: str, field_type: Any, value: Any, validate: bool):
         if (type(value) in JSON_ENCODABLE_TYPES and field_type in JSON_ENCODABLE_TYPES) or value is None:
             return value
-
-        # Replace any nested dictionaries with their targets
-        field_type_name = cls._get_field_type_name(field_type)
-        if cls._is_json_schema_subclass(field_type):
-            return field_type.from_dict(value, validate)
-        if is_optional(field_type):
-            return cls._decode_field(field, field_type.__args__[0], value, validate)
-        if field_type_name in ('Mapping', 'Dict'):
-            return {key: cls._decode_field(field, field_type.__args__[1], val, validate) for key, val in value.items()}
-        if field_type_name in ('Sequence', 'List'):
-            return [cls._decode_field(field, field_type.__args__[0], val, validate) for val in value]
-        if hasattr(field_type, "__supertype__"):  # NewType field
-            return cls._decode_field(field, field_type.__supertype__, value, validate)
-        if is_enum(field_type):
-            try:
-                decoded = field_type(value)
-            except ValueError:
-                if validate:
-                    raise
-                warnings.warn(f"Invalid enum value: {value}")
-                decoded = value
-            return decoded
-        if field_type in cls._field_encoders:
-            return cls._field_encoders[field_type].to_python(value)
-        warnings.warn(f"Unable to decode value for '{field}: {field_type_name}'")
-        return value
+        decoder = None
+        try:
+            decoder = cls._decode_cache[field_type]
+        except KeyError:
+            # Replace any nested dictionaries with their targets
+            field_type_name = cls._get_field_type_name(field_type)
+            if cls._is_json_schema_subclass(field_type):
+                def decoder(_, ft, val, valid): return ft.from_dict(val, valid)
+            elif is_optional(field_type):
+                def decoder(f, ft, val, valid): return cls._decode_field(f, ft.__args__[0], val, valid)
+            elif field_type_name in ('Mapping', 'Dict'):
+                def decoder(f, ft, val, valid):
+                    return {k: cls._decode_field(f, ft.__args__[1], v, valid) for k, v in val.items()}
+            elif field_type_name in ('Sequence', 'List'):
+                def decoder(f, ft, val, valid):
+                    return [cls._decode_field(f, ft.__args__[0], v, valid) for v in val]
+            elif hasattr(field_type, "__supertype__"):  # NewType field
+                def decoder(f, ft, val, valid):
+                    return cls._decode_field(f, ft.__supertype__, val, valid)
+            elif is_enum(field_type):
+                def decoder(_, ft, val, __): return ft(val)
+            elif field_type in cls._field_encoders:
+                def decoder(_, ft, val, __): return cls._field_encoders[ft].to_python(val)
+            if decoder is None:
+                warnings.warn(f"Unable to decode value for '{field}: {field_type_name}'")
+                return value
+            cls._decode_cache[field_type] = decoder
+        return decoder(field, field_type, value, validate)
 
     @classmethod
     def from_dict(cls: Any, data: JsonDict, validate=True) -> Any:
         """Returns a dataclass instance with all nested classes converted from the dict given"""
+        if cls._decode_cache is None:
+            cls._decode_cache = {}
         decoded_data = {}
         if validate:
             schema_validate(data, cls.json_schema())
-        for field, field_type in get_type_hints(cls).items():
+        for field, field_type in cls._get_type_hints().items():
             if not field.startswith("_"):
                 mapped_field = cls.field_mapping().get(field, field)
                 decoded_data[field] = cls._decode_field(field, field_type, data.get(mapped_field), validate)
@@ -237,6 +270,12 @@ class JsonSchemaMixin:
         return field_schema, required
 
     @classmethod
+    def _get_type_hints(cls):
+        if cls._type_hints is None:
+            cls._type_hints = get_type_hints(cls)
+        return cls._type_hints
+
+    @classmethod
     def json_schema(cls, embeddable=False) -> JsonDict:
         """Returns the JSON schema for the dataclass, along with the schema of any nested dataclasses
         within the 'definitions' field.
@@ -263,7 +302,7 @@ class JsonSchemaMixin:
         else:
             properties = {}
             required = []
-            for field, field_type in get_type_hints(cls).items():
+            for field, field_type in cls._get_type_hints().items():
                 # Internal field
                 if field.startswith("_"):
                     continue
