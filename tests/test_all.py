@@ -1,6 +1,9 @@
 from .conftest import Foo, Point, Recursive, OpaqueData
 import pytest
-from jsonschema import ValidationError
+try:
+    from valico import ValidationError
+except ImportError:
+    from jsonschema import ValidationError
 
 from dataclasses_jsonschema import JsonSchemaMixin
 

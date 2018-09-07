@@ -20,6 +20,9 @@ setup(
     author_email='simon.knibbs@gmail.com',
     url='https://github.com/s-knibbs/dataclasses-jsonschema',
     install_requires=requires,
+    extras_require={
+        'fast-validation': ["PyValico>=0.0.1"]
+    },
     setup_requires=['pytest-runner', 'setuptools_scm'],
     tests_require=['pytest', 'flake8', 'mypy'],
     license='MIT',

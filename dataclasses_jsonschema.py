@@ -7,7 +7,10 @@ from enum import Enum
 import warnings
 
 from dateutil.parser import parse
-from jsonschema import validate as schema_validate
+try:
+    from valico import validate as schema_validate
+except ImportError:
+    from jsonschema import validate as schema_validate
 
 JSON_ENCODABLE_TYPES = {
     str: {'type': 'string'},
