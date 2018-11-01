@@ -49,7 +49,7 @@ class FieldEncoder:
 
     @property
     def json_schema(self) -> JsonDict:
-        raise NotImplemented
+        raise NotImplementedError()
 
 
 class DateTimeFieldEncoder(FieldEncoder):
