@@ -12,7 +12,7 @@ FOO_SCHEMA = {
     'description': 'A foo that foos',
     'properties': {
         'a': {'format': 'date-time', 'type': 'string'},
-        'b': {'items': {'$ref': '#/definitions/Point', 'type': 'object'}, 'type': 'array'},
+        'b': {'items': {'$ref': '#/definitions/Point'}, 'type': 'array'},
         'c': {'additionalProperties': {'format': 'integer', 'type': 'number'}, 'type': 'object'},
         'd': {'type': 'string', 'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']},
         'e': {'type': 'string', 'minLength': 5, 'maxLength': 8}},
@@ -35,7 +35,7 @@ RECURSIVE_SCHEMA = {
     "description": Recursive.__doc__,
     "properties": {
         'a': {'type': 'string'},
-        'b': {'type': 'object', '$ref': '#/definitions/Recursive'}
+        'b': {'$ref': '#/definitions/Recursive'}
     },
     'type': 'object',
     'required': ['a']
