@@ -232,10 +232,7 @@ class JsonSchemaMixin:
         required = True
         field_type_name = cls._get_field_type_name(field_type)
         if cls._is_json_schema_subclass(field_type):
-            field_schema = {
-                'type': 'object',
-                '$ref': '#/definitions/{}'.format(field_type_name)
-            }
+            field_schema = {'$ref': '#/definitions/{}'.format(field_type_name)}
         else:
             # If is optional[...]
             if is_optional(field_type):
