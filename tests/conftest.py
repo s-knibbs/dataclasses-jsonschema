@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, NewType, Any
+from typing import Optional, List, Dict, NewType, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
@@ -43,6 +43,8 @@ class Foo(JsonSchemaMixin):
     b: List[Point]
     c: Dict[str, int]
     d: Weekday
+    f: Tuple[str, int]
+    g: Tuple[str, ...]
     e: Optional[Postcode] = None
 
 

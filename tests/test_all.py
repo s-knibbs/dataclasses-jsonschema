@@ -13,11 +13,13 @@ FOO_SCHEMA = {
     'properties': {
         'a': {'format': 'date-time', 'type': 'string'},
         'b': {'items': {'$ref': '#/definitions/Point'}, 'type': 'array'},
-        'c': {'additionalProperties': {'format': 'integer', 'type': 'number'}, 'type': 'object'},
+        'c': {'additionalProperties': {'type': 'integer'}, 'type': 'object'},
         'd': {'type': 'string', 'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']},
+        'f': {'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': [{'type': 'string'}, {'type': 'integer'}]},
+        'g': {'type': 'array', 'items': {'type': 'string'}},
         'e': {'type': 'string', 'minLength': 5, 'maxLength': 8}},
     'type': 'object',
-    'required': ['a', 'b', 'c', 'd']
+    'required': ['a', 'b', 'c', 'd', 'f', 'g']
 }
 
 # Fixme: Fields in description no longer match
@@ -25,8 +27,8 @@ POINT_SCHEMA = {
     'description': Point.__doc__,
     'type': 'object',
     'properties': {
-        'z': {'format': 'float', 'type': 'number'},
-        'y': {'format': 'float', 'type': 'number'}
+        'z': {'type': 'number'},
+        'y': {'type': 'number'}
     },
     'required': ['z', 'y']
 }
@@ -76,7 +78,9 @@ def test_serialise_deserialise():
         'b': [{'z': 1.2, 'y': 1.5}],
         'c': {'Mon': 1, 'Tue': 2},
         'd': 'Wednesday',
-        'e': 'testing'
+        'e': 'testing',
+        'f': ('xyz', 6),
+        'g': ('abc',)
     }
     f = Foo.from_dict(data)
     assert data == f.to_dict()
@@ -94,7 +98,9 @@ def test_newtype_field_validation():
             'b': [{'z': 1.2, 'y': 1.5}],
             'c': {'Mon': 1, 'Tue': 2},
             'd': 'Wednesday',
-            'e': 't'
+            'e': 't',
+            'f': ('xyz', 6),
+            'g': ('abc',)
         })
 
 
