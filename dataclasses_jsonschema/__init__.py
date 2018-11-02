@@ -195,8 +195,9 @@ class JsonSchemaMixin:
                 def decoder(f, ft, val, valid):
                     return {k: cls._decode_field(f, ft.__args__[1], v, valid) for k, v in val.items()}
             elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
+                seq_type = tuple if field_type_name == "Tuple" else list
+
                 def decoder(f, ft, val, valid):
-                    seq_type = tuple if issubclass(ft, Tuple) else list
                     return seq_type(cls._decode_field(f, ft.__args__[0], v, valid) for v in val)
             elif field_type_name == "Tuple":
                 def decoder(f, ft, val, valid):
