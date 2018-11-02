@@ -14,9 +14,9 @@ except ImportError:
 
 JSON_ENCODABLE_TYPES = {
     str: {'type': 'string'},
-    int: {'type': 'number', 'format': 'integer'},
+    int: {'type': 'integer'},
     bool: {'type': 'boolean'},
-    float: {'type': 'number', 'format': 'float'}
+    float: {'type': 'number'}
 }
 
 JsonEncodable = Union[int, float, str, bool]
@@ -137,13 +137,15 @@ class JsonSchemaMixin:
                         self._encode_field(ft.__args__[0], k, o): self._encode_field(ft.__args__[1], v, o)
                         for k, v in val.items()
                     }
-            elif field_type_name in ('Sequence', 'List'):
-                def encoder(ft, val, o): return type(val)(self._encode_field(ft.__args__[0], v, o) for v in val)
+            elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
+                def encoder(ft, val, o): return [self._encode_field(ft.__args__[0], v, o) for v in val]
+            elif field_type_name == 'Tuple':
+                def encoder(ft, val, o):
+                    return [self._encode_field(ft.__args__[idx], v, o) for idx, v in enumerate(val)]
             elif self._is_json_schema_subclass(field_type):
                 # Only need to validate at the top level
                 def encoder(_, v, o): return v.to_dict(omit_none=o, validate=False)
             else:
-                # TODO: Copy value?
                 def encoder(_, v, __): return v
             self.__class__._encode_cache[field_type] = encoder  # type: ignore
         return encoder(field_type, value, omit_none)
@@ -192,9 +194,14 @@ class JsonSchemaMixin:
             elif field_type_name in ('Mapping', 'Dict'):
                 def decoder(f, ft, val, valid):
                     return {k: cls._decode_field(f, ft.__args__[1], v, valid) for k, v in val.items()}
-            elif field_type_name in ('Sequence', 'List'):
+            elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
+                seq_type = tuple if field_type_name == "Tuple" else list
+
                 def decoder(f, ft, val, valid):
-                    return [cls._decode_field(f, ft.__args__[0], v, valid) for v in val]
+                    return seq_type(cls._decode_field(f, ft.__args__[0], v, valid) for v in val)
+            elif field_type_name == "Tuple":
+                def decoder(f, ft, val, valid):
+                    return tuple(cls._decode_field(f, ft.__args__[idx], v, valid) for idx, v in enumerate(val))
             elif hasattr(field_type, "__supertype__"):  # NewType field
                 def decoder(f, ft, val, valid):
                     return cls._decode_field(f, ft.__supertype__, val, valid)
@@ -255,10 +262,17 @@ class JsonSchemaMixin:
                 field_schema = {'type': 'object'}
                 if field_type.__args__[1] is not Any:
                     field_schema['additionalProperties'] = cls._get_field_schema(field_type.__args__[1])[0]
-            elif field_type_name in ('Sequence', 'List'):
+            elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
                 field_schema = {'type': 'array'}
                 if field_type.__args__[0] is not Any:
                     field_schema['items'] = cls._get_field_schema(field_type.__args__[0])[0]
+            elif field_type_name == "Tuple":
+                tuple_len = len(field_type.__args__)
+                # TODO: How do we handle Optional type within lists / tuples
+                field_schema = {
+                    'type': 'array', 'minItems': tuple_len, 'maxItems': tuple_len,
+                    'items': [cls._get_field_schema(type_arg)[0] for type_arg in field_type.__args__]
+                }
             elif field_type in JSON_ENCODABLE_TYPES:
                 field_schema = JSON_ENCODABLE_TYPES[field_type]
             elif field_type in cls._field_encoders:
