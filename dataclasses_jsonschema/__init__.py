@@ -138,10 +138,10 @@ class JsonSchemaMixin:
                         for k, v in val.items()
                     }
             elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
-                def encoder(ft, val, o): return type(val)(self._encode_field(ft.__args__[0], v, o) for v in val)
+                def encoder(ft, val, o): return [self._encode_field(ft.__args__[0], v, o) for v in val]
             elif field_type_name == 'Tuple':
                 def encoder(ft, val, o):
-                    return tuple(self._encode_field(ft.__args__[idx], v, o) for idx, v in enumerate(val))
+                    return [self._encode_field(ft.__args__[idx], v, o) for idx, v in enumerate(val)]
             elif self._is_json_schema_subclass(field_type):
                 # Only need to validate at the top level
                 def encoder(_, v, o): return v.to_dict(omit_none=o, validate=False)
@@ -196,7 +196,8 @@ class JsonSchemaMixin:
                     return {k: cls._decode_field(f, ft.__args__[1], v, valid) for k, v in val.items()}
             elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
                 def decoder(f, ft, val, valid):
-                    return type(val)(cls._decode_field(f, ft.__args__[0], v, valid) for v in val)
+                    seq_type = tuple if issubclass(ft, Tuple) else list
+                    return seq_type(cls._decode_field(f, ft.__args__[0], v, valid) for v in val)
             elif field_type_name == "Tuple":
                 def decoder(f, ft, val, valid):
                     return tuple(cls._decode_field(f, ft.__args__[idx], v, valid) for idx, v in enumerate(val))

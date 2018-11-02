@@ -79,10 +79,12 @@ def test_serialise_deserialise():
         'c': {'Mon': 1, 'Tue': 2},
         'd': 'Wednesday',
         'e': 'testing',
-        'f': ('xyz', 6),
-        'g': ('abc',)
+        'f': ['xyz', 6],
+        'g': ['abc']
     }
     f = Foo.from_dict(data)
+    assert f.f == ('xyz', 6)
+    assert f.g == ('abc',)
     assert data == f.to_dict()
 
 
@@ -99,8 +101,8 @@ def test_newtype_field_validation():
             'c': {'Mon': 1, 'Tue': 2},
             'd': 'Wednesday',
             'e': 't',
-            'f': ('xyz', 6),
-            'g': ('abc',)
+            'f': ['xyz', 6],
+            'g': ['abc']
         })
 
 
