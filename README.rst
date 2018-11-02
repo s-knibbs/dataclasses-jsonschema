@@ -51,6 +51,7 @@ Deserialise data:
     >>> Point.from_dict({'x': 3.14, y: 'wrong'})
     jsonschema.exceptions.ValidationError: 'wrong' is not of type 'number'
 
+For more examples `see the tests <https://github.com/s-knibbs/dataclasses-jsonschema/blob/master/tests/conftest.py>`_
 
 TODO
 ----
