@@ -60,3 +60,18 @@ class OpaqueData(JsonSchemaMixin):
     """Structure with unknown types"""
     a: List[Any]
     b: Dict[str, Any]
+
+
+@dataclass
+class Product(JsonSchemaMixin):
+    name: str
+    cost: float
+
+
+@dataclass
+class ShoppingCart(JsonSchemaMixin):
+    items: List[Product]
+
+    @property
+    def cost(self):
+        return sum([item.cost for item in items])
