@@ -226,7 +226,7 @@ class JsonSchemaMixin:
         for field, field_type in cls._get_type_hints().items():
             if not field.startswith("_"):
                 mapped_field = cls.field_mapping().get(field, field)
-                decoded_data[field] = cls._decode_field(field, field_type, data.get(mapped_field), validate)
+                decoded_data[field] = cls._decode_field(field, field_type, data.get(mapped_field), validate=False)
         return cls(**decoded_data)
 
     @staticmethod

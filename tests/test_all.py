@@ -1,4 +1,4 @@
-from .conftest import Foo, Point, Recursive, OpaqueData
+from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product
 import pytest
 try:
     from valico import ValidationError
@@ -53,6 +53,23 @@ OPAQUE_DATA_SCHEMA = {
     'required': ['a', 'b']
 }
 
+PRODUCT_SCHEMA = {
+    'description': Product.__doc__,
+    'properties': {'cost': {'type': 'number'},
+                   'name': {'type': 'string'}},
+    'required': ['name', 'cost'],
+    'type': 'object'
+}
+
+SHOPPING_CART_SCHEMA = {
+    'description': ShoppingCart.__doc__,
+    'properties': {
+        'items': {'items': {'$ref': '#/definitions/Product'}, 'type': 'array'},
+    },
+    'required': ['items'],
+    'type': 'object'
+}
+
 
 def test_json_schema():
     definitions = {'Point': POINT_SCHEMA}
@@ -68,7 +85,8 @@ def test_embeddable_json_schema():
     expected = {'Point': POINT_SCHEMA, 'Foo': FOO_SCHEMA}
     assert expected == Foo.json_schema(embeddable=True)
     expected = {'Point': POINT_SCHEMA, 'Foo': FOO_SCHEMA,
-                'Recursive': RECURSIVE_SCHEMA, 'OpaqueData': OPAQUE_DATA_SCHEMA}
+                'Recursive': RECURSIVE_SCHEMA, 'OpaqueData': OPAQUE_DATA_SCHEMA,
+                'Product': PRODUCT_SCHEMA, 'ShoppingCart': SHOPPING_CART_SCHEMA}
     assert expected == JsonSchemaMixin.json_schema()
 
 
@@ -111,3 +129,16 @@ def test_recursive_data():
     r = Recursive.from_dict(data)
     assert r.a == "test"
     assert r.to_dict() == data
+
+
+def test_recursive_validation():
+    # a valid shopping cart containing two items
+    data = {"items": [{"name": "apple", "cost": 0.4}, {"name": "banana", "cost": 0.6}]}
+    cart = ShoppingCart.from_dict(data, validate=True)
+    assert len(cart.items) == 2
+    assert {item.name for item in cart.items} == {"apple", "banana"}
+
+    # a shopping cart containing an invalid item
+    data = {"items": [{"name": 123}]}
+    with pytest.raises(ValidationError):
+        ShoppingCart.from_dict(data, validate=True)
