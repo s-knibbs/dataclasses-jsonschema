@@ -40,7 +40,7 @@ class Point(JsonSchemaMixin):
 class Foo(JsonSchemaMixin):
     """A foo that foos"""
     a: datetime
-    b: List[Point]
+    b: Optional[List[Point]]
     c: Dict[str, int]
     d: Weekday
     f: Tuple[str, int]

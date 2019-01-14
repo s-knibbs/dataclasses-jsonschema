@@ -284,6 +284,19 @@ class JsonSchemaMixin:
         return field_schema, required
 
     @classmethod
+    def _get_field_definitions(cls, field_type: Any, definitions: JsonDict):
+        field_type_name = cls._get_field_type_name(field_type)
+        if is_optional(field_type) or field_type_name in ('Sequence', 'List', 'Tuple'):
+            cls._get_field_definitions(field_type.__args__[0], definitions)
+        elif field_type_name in ('Dict', 'Mapping'):
+            cls._get_field_definitions(field_type.__args__[1], definitions)
+        elif cls._is_json_schema_subclass(field_type):
+            # Prevent recursion from forward refs & circular type dependencies
+            if field_type.__name__ not in definitions:
+                definitions[field_type.__name__] = None
+                definitions.update(field_type.json_schema(embeddable=True))
+
+    @classmethod
     def _get_type_hints(cls):
         if cls._type_hints is None:
             cls._type_hints = get_type_hints(cls)
@@ -322,19 +335,7 @@ class JsonSchemaMixin:
                     continue
                 mapped_field = cls.field_mapping().get(field, field)
                 properties[mapped_field], is_required = cls._get_field_schema(field_type)
-                item_type = field_type
-                field_type_name = cls._get_field_type_name(field_type)
-                if is_optional(field_type):
-                    item_type = field_type.__args__[0]
-                elif field_type_name in ('Dict', 'Mapping'):
-                    item_type = field_type.__args__[1]
-                elif field_type_name in ('Sequence', 'List'):
-                    item_type = field_type.__args__[0]
-                if cls._is_json_schema_subclass(item_type):
-                    # Prevent recursion from forward refs & circular type dependencies
-                    if item_type.__name__ not in definitions:
-                        definitions[item_type.__name__] = None
-                        definitions.update(item_type.json_schema(embeddable=True))
+                cls._get_field_definitions(field_type, definitions)
                 if is_required:
                     required.append(mapped_field)
             schema = {

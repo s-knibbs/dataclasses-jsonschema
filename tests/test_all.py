@@ -19,7 +19,7 @@ FOO_SCHEMA = {
         'g': {'type': 'array', 'items': {'type': 'string'}},
         'e': {'type': 'string', 'minLength': 5, 'maxLength': 8}},
     'type': 'object',
-    'required': ['a', 'b', 'c', 'd', 'f', 'g']
+    'required': ['a', 'c', 'd', 'f', 'g']
 }
 
 # Fixme: Fields in description no longer match
