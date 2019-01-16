@@ -137,6 +137,7 @@ def test_recursive_validation():
     cart = ShoppingCart.from_dict(data, validate=True)
     assert len(cart.items) == 2
     assert {item.name for item in cart.items} == {"apple", "banana"}
+    assert cart.cost == 0.4 + 0.6
 
     # a shopping cart containing an invalid item
     data = {"items": [{"name": 123}]}

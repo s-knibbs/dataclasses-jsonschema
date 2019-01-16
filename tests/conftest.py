@@ -74,4 +74,4 @@ class ShoppingCart(JsonSchemaMixin):
 
     @property
     def cost(self):
-        return sum([item.cost for item in items])
+        return sum([item.cost for item in self.items])
