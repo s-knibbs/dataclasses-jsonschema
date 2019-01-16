@@ -2,6 +2,7 @@ from typing import Optional, List, Dict, NewType, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
+from uuid import UUID
 
 from dataclasses_jsonschema import JsonSchemaMixin, FieldEncoder
 
@@ -36,6 +37,9 @@ class Point(JsonSchemaMixin):
         return {'x': 'z'}
 
 
+NewPoint = NewType('NewPoint', Point)
+
+
 @dataclass
 class Foo(JsonSchemaMixin):
     """A foo that foos"""
@@ -46,6 +50,7 @@ class Foo(JsonSchemaMixin):
     f: Tuple[str, int]
     g: Tuple[str, ...]
     e: Optional[Postcode] = None
+    h: Optional[NewPoint] = None
 
 
 @dataclass
@@ -75,3 +80,8 @@ class ShoppingCart(JsonSchemaMixin):
     @property
     def cost(self):
         return sum([item.cost for item in self.items])
+
+
+@dataclass
+class ProductList(JsonSchemaMixin):
+    products: Dict[UUID, Product]

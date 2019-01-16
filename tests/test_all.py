@@ -1,4 +1,6 @@
-from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product
+from uuid import UUID
+
+from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList
 import pytest
 try:
     from valico import ValidationError
@@ -17,7 +19,9 @@ FOO_SCHEMA = {
         'd': {'type': 'string', 'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']},
         'f': {'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': [{'type': 'string'}, {'type': 'integer'}]},
         'g': {'type': 'array', 'items': {'type': 'string'}},
-        'e': {'type': 'string', 'minLength': 5, 'maxLength': 8}},
+        'e': {'type': 'string', 'minLength': 5, 'maxLength': 8},
+        'h': {'$ref': '#/definitions/Point'}
+    },
     'type': 'object',
     'required': ['a', 'c', 'd', 'f', 'g']
 }
@@ -69,6 +73,14 @@ SHOPPING_CART_SCHEMA = {
     'required': ['items'],
     'type': 'object'
 }
+PRODUCT_LIST_SCHEMA = {
+    'description': ProductList.__doc__,
+    'properties': {
+        'products': {'additionalProperties': {'$ref': '#/definitions/Product'}, 'type': 'object'}
+    },
+    'type': 'object',
+    'required': ['products']
+}
 
 
 def test_json_schema():
@@ -86,7 +98,8 @@ def test_embeddable_json_schema():
     assert expected == Foo.json_schema(embeddable=True)
     expected = {'Point': POINT_SCHEMA, 'Foo': FOO_SCHEMA,
                 'Recursive': RECURSIVE_SCHEMA, 'OpaqueData': OPAQUE_DATA_SCHEMA,
-                'Product': PRODUCT_SCHEMA, 'ShoppingCart': SHOPPING_CART_SCHEMA}
+                'Product': PRODUCT_SCHEMA, 'ShoppingCart': SHOPPING_CART_SCHEMA,
+                'ProductList': PRODUCT_LIST_SCHEMA}
     assert expected == JsonSchemaMixin.json_schema()
 
 
@@ -98,7 +111,8 @@ def test_serialise_deserialise():
         'd': 'Wednesday',
         'e': 'testing',
         'f': ['xyz', 6],
-        'g': ['abc']
+        'g': ['abc'],
+        'h': {'z': 0.5, 'y': 1.0}
     }
     f = Foo.from_dict(data)
     assert f.f == ('xyz', 6)
@@ -143,3 +157,10 @@ def test_recursive_validation():
     data = {"items": [{"name": 123}]}
     with pytest.raises(ValidationError):
         ShoppingCart.from_dict(data, validate=True)
+
+
+def test_non_string_keys():
+    p = ProductList(products={UUID('462b92e8-b3f7-4cb7-ae93-18e829c7e10d'): Product(name="hammer", cost=25.10)})
+    expected_data = {"products": {"462b92e8-b3f7-4cb7-ae93-18e829c7e10d": {"name": "hammer", "cost": 25.10}}}
+    assert p.to_dict() == expected_data
+    assert ProductList.from_dict(expected_data) == p

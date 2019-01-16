@@ -145,6 +145,9 @@ class JsonSchemaMixin:
             elif self._is_json_schema_subclass(field_type):
                 # Only need to validate at the top level
                 def encoder(_, v, o): return v.to_dict(omit_none=o, validate=False)
+            elif hasattr(field_type, "__supertype__"):  # NewType field
+                def encoder(ft, v, o):
+                    return self._encode_field(ft.__supertype__, v, o)
             else:
                 def encoder(_, v, __): return v
             self.__class__._encode_cache[field_type] = encoder  # type: ignore
@@ -193,7 +196,10 @@ class JsonSchemaMixin:
                 def decoder(f, ft, val, valid): return cls._decode_field(f, ft.__args__[0], val, valid)
             elif field_type_name in ('Mapping', 'Dict'):
                 def decoder(f, ft, val, valid):
-                    return {k: cls._decode_field(f, ft.__args__[1], v, valid) for k, v in val.items()}
+                    return {
+                        cls._decode_field(f, ft.__args__[0], k, valid): cls._decode_field(f, ft.__args__[1], v, valid)
+                        for k, v in val.items()
+                    }
             elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
                 seq_type = tuple if field_type_name == "Tuple" else list
 
