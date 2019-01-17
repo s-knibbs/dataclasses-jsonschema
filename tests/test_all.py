@@ -16,7 +16,11 @@ FOO_SCHEMA = {
         'a': {'format': 'date-time', 'type': 'string'},
         'b': {'items': {'$ref': '#/definitions/Point'}, 'type': 'array'},
         'c': {'additionalProperties': {'type': 'integer'}, 'type': 'object'},
-        'd': {'type': 'string', 'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']},
+        'd': {
+            'type': 'string',
+            'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+            'x-enum-name': 'Weekday'
+        },
         'f': {'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': [{'type': 'string'}, {'type': 'integer'}]},
         'g': {'type': 'array', 'items': {'type': 'string'}},
         'e': {'type': 'string', 'minLength': 5, 'maxLength': 8},

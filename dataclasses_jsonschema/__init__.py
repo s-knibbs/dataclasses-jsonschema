@@ -264,6 +264,7 @@ class JsonSchemaMixin:
                     else:
                         field_schema.update(cls._field_encoders[member_types.pop()].json_schema)
                 field_schema['enum'] = values
+                field_schema['x-enum-name'] = field_type_name
             elif field_type_name in ('Dict', 'Mapping'):
                 field_schema = {'type': 'object'}
                 if field_type.__args__[1] is not Any:
