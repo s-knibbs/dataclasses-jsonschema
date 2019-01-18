@@ -7,10 +7,27 @@ try:
 except ImportError:
     from jsonschema import ValidationError
 
-from dataclasses_jsonschema import JsonSchemaMixin
+from dataclasses_jsonschema import JsonSchemaMixin, SwaggerSpecVersion
 
 
 FOO_SCHEMA = {
+    'description': 'A foo that foos',
+    'properties': {
+        'a': {'format': 'date-time', 'type': 'string'},
+        'b': {'items': {'$ref': '#/definitions/Point'}, 'type': 'array'},
+        'c': {'additionalProperties': {'type': 'integer'}, 'type': 'object'},
+        'd': {'type': 'string', 'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']},
+        'f': {'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': [{'type': 'string'}, {'type': 'integer'}]},
+        'g': {'type': 'array', 'items': {'type': 'string'}},
+        'e': {'type': 'string', 'minLength': 5, 'maxLength': 8},
+        'h': {'$ref': '#/definitions/Point'}
+    },
+    'type': 'object',
+    'required': ['a', 'c', 'd', 'f', 'g']
+}
+
+
+SWAGGER_FOO_SCHEMA = {
     'description': 'A foo that foos',
     'properties': {
         'a': {'format': 'date-time', 'type': 'string'},
@@ -87,24 +104,24 @@ PRODUCT_LIST_SCHEMA = {
 }
 
 
-def test_json_schema():
-    definitions = {'Point': POINT_SCHEMA}
-    schema = {**FOO_SCHEMA, **{
-            'definitions': definitions,
-            '$schema': 'http://json-schema.org/draft-04/schema#'
-        }
-    }
-    assert schema == Foo.json_schema()
-
-
 def test_embeddable_json_schema():
     expected = {'Point': POINT_SCHEMA, 'Foo': FOO_SCHEMA}
     assert expected == Foo.json_schema(embeddable=True)
-    expected = {'Point': POINT_SCHEMA, 'Foo': FOO_SCHEMA,
+    expected = {'Point': POINT_SCHEMA, 'Foo': SWAGGER_FOO_SCHEMA,
                 'Recursive': RECURSIVE_SCHEMA, 'OpaqueData': OPAQUE_DATA_SCHEMA,
                 'Product': PRODUCT_SCHEMA, 'ShoppingCart': SHOPPING_CART_SCHEMA,
                 'ProductList': PRODUCT_LIST_SCHEMA}
-    assert expected == JsonSchemaMixin.json_schema()
+    assert expected == JsonSchemaMixin.json_schema(swagger_version=SwaggerSpecVersion.V2)
+
+
+def test_json_schema():
+    definitions = {'Point': POINT_SCHEMA}
+    schema = {**FOO_SCHEMA, **{
+        'definitions': definitions,
+        '$schema': 'http://json-schema.org/draft-04/schema#'
+    }
+              }
+    assert schema == Foo.json_schema()
 
 
 def test_serialise_deserialise():
