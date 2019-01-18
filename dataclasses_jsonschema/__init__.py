@@ -379,7 +379,7 @@ class JsonSchemaMixin:
             if cls._schema is None:
                 cls._schema = {}
 
-            cls._schema = schema
+            cls._schema[swagger_version] = schema
 
         if embeddable:
             return {**definitions, cls.__name__: schema}
