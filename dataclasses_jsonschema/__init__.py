@@ -56,7 +56,7 @@ class DateTimeFieldEncoder(FieldEncoder):
     """Encodes datetimes to RFC3339 format"""
 
     def to_wire(self, value: datetime) -> str:
-        out = value.isoformat(timespec='seconds')
+        out = value.isoformat()
 
         # Assume UTC if timezone is missing
         if value.tzinfo is None:
