@@ -1,16 +1,16 @@
-from typing import Optional, Type, Union, Any, Dict, cast, Tuple, get_type_hints, List
-
+from typing import Optional, Type, Union, Any, Dict, cast, Tuple, get_type_hints, List, TypeVar
+import re
 from datetime import datetime
-from dataclasses import fields
+from dataclasses import fields, is_dataclass
 from uuid import UUID
 from enum import Enum
 import warnings
 
 from dateutil.parser import parse
 try:
-    from valico import validate as schema_validate
+    import valico as validator
 except ImportError:
-    from jsonschema import validate as schema_validate
+    import jsonschema as validator
 
 JSON_ENCODABLE_TYPES = {
     str: {'type': 'string'},
@@ -21,6 +21,10 @@ JSON_ENCODABLE_TYPES = {
 
 JsonEncodable = Union[int, float, str, bool]
 JsonDict = Dict[str, Any]
+
+
+class ValidationError(Exception):
+    pass
 
 
 def is_enum(field_type: Any):
@@ -84,9 +88,21 @@ class UuidField(FieldEncoder):
         return {'type': 'string', 'format': 'uuid'}
 
 
-class SwaggerSpecVersion(Enum):
+class SchemaType(Enum):
+    DRAFT_06 = "Draft6"
+    DRAFT_04 = "Draft4"
+    SWAGGER_V2 = "2.0"
+    SWAGGER_V3 = "3.0"
+    # Alias of SWAGGER_V2
     V2 = "2.0"
+    # Alias of SWAGGER_V3
     V3 = "3.0"
+
+
+# Retained for backwards compatibility
+SwaggerSpecVersion = SchemaType
+
+T = TypeVar("T", bound='JsonSchemaMixin')
 
 
 class JsonSchemaMixin:
@@ -96,8 +112,8 @@ class JsonSchemaMixin:
     _field_encoders: Dict[Type, FieldEncoder] = {datetime: DateTimeFieldEncoder(), UUID: UuidField()}
 
     # Cache of the generated schema
-    _schema: Optional[Dict[Optional[SwaggerSpecVersion], JsonDict]] = None
-    _definitions: Optional[Dict[Optional[SwaggerSpecVersion], JsonDict]] = None
+    _schema: Optional[Dict[SchemaType, JsonDict]] = None
+    _definitions: Optional[Dict[SchemaType, JsonDict]] = None
     _encode_cache: Any = None
     _decode_cache: Any = None
     # Cache of get_type_hints(cls)
@@ -136,6 +152,20 @@ class JsonSchemaMixin:
                 def encoder(ft, val, o): return self._encode_field(ft.__args__[0], val, o)
             elif is_enum(field_type):
                 def encoder(_, v, __): return v.value
+            elif field_type_name == 'Union':
+                # Attempt to encode the field with each union variant.
+                # TODO: Find a more reliable method than this since in the case 'Union[List[str], Dict[str, int]]' this
+                # will just output the dict keys as a list
+                encoded = None
+                for variant in field_type.__args__:
+                    try:
+                        encoded = self._encode_field(variant, value, omit_none)
+                        break
+                    except (TypeError, AttributeError):
+                        continue
+                if encoded is None:
+                    raise TypeError("No variant of '{}' matched the type '{}'".format(field_type, type(value)))
+                return encoded
             elif field_type_name in ('Mapping', 'Dict'):
                 def encoder(ft, val, o):
                     return {
@@ -182,11 +212,14 @@ class JsonSchemaMixin:
                 continue
             data[target_field] = value
         if validate:
-            schema_validate(data, self.json_schema())
+            try:
+                validator.validate(data, self.json_schema())
+            except validator.ValidationError as e:
+                raise ValidationError(str(e)) from e
         return data
 
     @classmethod
-    def _decode_field(cls, field: str, field_type: Any, value: Any, validate: bool):
+    def _decode_field(cls, field: str, field_type: Any, value: Any, validate: bool) -> Any:
         if (type(value) in JSON_ENCODABLE_TYPES and field_type in JSON_ENCODABLE_TYPES) or value is None:
             return value
         decoder = None
@@ -199,6 +232,17 @@ class JsonSchemaMixin:
                 def decoder(_, ft, val, valid): return ft.from_dict(val, valid)
             elif is_optional(field_type):
                 def decoder(f, ft, val, valid): return cls._decode_field(f, ft.__args__[0], val, valid)
+            elif field_type_name == 'Union':
+                # Attempt to decode the value using each decoder in turn
+                decoded = None
+                for variant in field_type.__args__:
+                    try:
+                        decoded = cls._decode_field(field, variant, value, validate)
+                        break
+                    except (AttributeError, TypeError, ValueError):
+                        continue
+                if decoded is not None:
+                    return decoded
             elif field_type_name in ('Mapping', 'Dict'):
                 def decoder(f, ft, val, valid):
                     return {
@@ -227,34 +271,42 @@ class JsonSchemaMixin:
         return decoder(field, field_type, value, validate)
 
     @classmethod
-    def from_dict(cls: Any, data: JsonDict, validate=True) -> Any:
+    def from_dict(cls: Type[T], data: JsonDict, validate=True) -> T:
         """Returns a dataclass instance with all nested classes converted from the dict given"""
+        if cls is JsonSchemaMixin:
+            raise NotImplementedError
+
         if cls._decode_cache is None:
             cls._decode_cache = {}
         decoded_data = {}
         if validate:
-            schema_validate(data, cls.json_schema())
+            try:
+                validator.validate(data, cls.json_schema())
+            except validator.ValidationError as e:
+                raise ValidationError(str(e)) from e
         for field, field_type in cls._get_type_hints().items():
             if not field.startswith("_"):
                 mapped_field = cls.field_mapping().get(field, field)
                 decoded_data[field] = cls._decode_field(field, field_type, data.get(mapped_field), validate=False)
-        return cls(**decoded_data)
+        # Need to ignore the type error here, since mypy doesn't know that subclasses are dataclasses
+        return cls(**decoded_data)  # type: ignore
 
     @staticmethod
     def _is_json_schema_subclass(field_type) -> bool:
         return issubclass_safe(field_type, JsonSchemaMixin)
 
     @classmethod
-    def _get_field_schema(cls, field_type: Any, swagger_version: Optional[SwaggerSpecVersion]) -> Tuple[JsonDict, bool]:
+    def _get_field_schema(cls, field_type: Any, schema_type: SchemaType) -> Tuple[JsonDict, bool]:
         field_schema: JsonDict = {'type': 'object'}
         required = True
         field_type_name = cls._get_field_type_name(field_type)
+        ref_path = '#/components/schemas' if schema_type == SchemaType.SWAGGER_V3 else '#/definitions'
         if cls._is_json_schema_subclass(field_type):
-            field_schema = {'$ref': '#/definitions/{}'.format(field_type_name)}
+            field_schema = {'$ref': '{}/{}'.format(ref_path, field_type_name)}
         else:
             # If is optional[...]
             if is_optional(field_type):
-                field_schema = cls._get_field_schema(field_type.__args__[0], swagger_version)[0]
+                field_schema = cls._get_field_schema(field_type.__args__[0], schema_type)[0]
                 required = False
             elif is_enum(field_type):
                 member_types = set()
@@ -272,48 +324,57 @@ class JsonSchemaMixin:
 
                 # If embedding into a swagger spec add the enum name as an extension.
                 # Note: Unlike swagger, JSON schema does not support extensions
-                if swagger_version is not None:
+                if schema_type in (SchemaType.SWAGGER_V2, SchemaType.SWAGGER_V3):
                     field_schema['x-enum-name'] = field_type_name
+            elif field_type_name == 'Union':
+                if schema_type == SchemaType.SWAGGER_V2:
+                    raise TypeError('Type unions unsupported in Swagger 2.0')
+                field_schema = {
+                    'oneOf': [cls._get_field_schema(variant, schema_type)[0] for variant in field_type.__args__]
+                }
             elif field_type_name in ('Dict', 'Mapping'):
                 field_schema = {'type': 'object'}
                 if field_type.__args__[1] is not Any:
                     field_schema['additionalProperties'] = cls._get_field_schema(
-                        field_type.__args__[1], swagger_version
+                        field_type.__args__[1], schema_type
                     )[0]
             elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
                 field_schema = {'type': 'array'}
                 if field_type.__args__[0] is not Any:
-                    field_schema['items'] = cls._get_field_schema(field_type.__args__[0], swagger_version)[0]
+                    field_schema['items'] = cls._get_field_schema(field_type.__args__[0], schema_type)[0]
             elif field_type_name == "Tuple":
                 tuple_len = len(field_type.__args__)
                 # TODO: How do we handle Optional type within lists / tuples
                 field_schema = {
                     'type': 'array', 'minItems': tuple_len, 'maxItems': tuple_len,
-                    'items': [cls._get_field_schema(type_arg, swagger_version)[0] for type_arg in field_type.__args__]
+                    'items': [cls._get_field_schema(type_arg, schema_type)[0] for type_arg in field_type.__args__]
                 }
             elif field_type in JSON_ENCODABLE_TYPES:
                 field_schema = JSON_ENCODABLE_TYPES[field_type]
             elif field_type in cls._field_encoders:
                 field_schema.update(cls._field_encoders[field_type].json_schema)
             elif hasattr(field_type, '__supertype__'):  # NewType fields
-                field_schema, _ = cls._get_field_schema(field_type.__supertype__, swagger_version)
+                field_schema, _ = cls._get_field_schema(field_type.__supertype__, schema_type)
             else:
                 warnings.warn(f"Unable to create schema for '{field_type_name}'")
         return field_schema, required
 
     @classmethod
     def _get_field_definitions(cls, field_type: Any, definitions: JsonDict,
-                               swagger_version: Optional[SwaggerSpecVersion]):
+                               schema_type: SchemaType):
         field_type_name = cls._get_field_type_name(field_type)
         if is_optional(field_type) or field_type_name in ('Sequence', 'List', 'Tuple'):
-            cls._get_field_definitions(field_type.__args__[0], definitions, swagger_version)
+            cls._get_field_definitions(field_type.__args__[0], definitions, schema_type)
         elif field_type_name in ('Dict', 'Mapping'):
-            cls._get_field_definitions(field_type.__args__[1], definitions, swagger_version)
+            cls._get_field_definitions(field_type.__args__[1], definitions, schema_type)
+        elif field_type_name == 'Union':
+            for variant in field_type.__args__:
+                cls._get_field_definitions(variant, definitions, schema_type)
         elif cls._is_json_schema_subclass(field_type):
             # Prevent recursion from forward refs & circular type dependencies
             if field_type.__name__ not in definitions:
                 definitions[field_type.__name__] = None
-                definitions.update(field_type.json_schema(embeddable=True, swagger_version=swagger_version))
+                definitions.update(field_type.json_schema(embeddable=True, schema_type=schema_type))
 
     @classmethod
     def _get_type_hints(cls):
@@ -322,7 +383,18 @@ class JsonSchemaMixin:
         return cls._type_hints
 
     @classmethod
-    def json_schema(cls, embeddable: bool = False, swagger_version: Optional[SwaggerSpecVersion] = None) -> JsonDict:
+    def all_json_schemas(cls, schema_type: SchemaType = SchemaType.DRAFT_06) -> JsonDict:
+        """Returns JSON schemas for all subclasses"""
+        definitions = {}
+        for subclass in cls.__subclasses__():
+            if is_dataclass(subclass):
+                definitions.update(subclass.json_schema(embeddable=True, schema_type=schema_type))
+            else:
+                definitions.update(subclass.all_json_schemas(schema_type=schema_type))
+        return definitions
+
+    @classmethod
+    def json_schema(cls, embeddable: bool = False, schema_type: SchemaType = SchemaType.DRAFT_06, **kwargs) -> JsonDict:
         """Returns the JSON schema for the dataclass, along with the schema of any nested dataclasses
         within the 'definitions' field.
 
@@ -331,29 +403,31 @@ class JsonSchemaMixin:
 
         If embedding the schema into a swagger api, specify 'swagger_version' to generate a spec compatible with that
         version.
-
-        If called on the base class, this returns the JSON schema of all subclasses.
         """
-        definitions: JsonDict = {}
-
-        if cls._definitions is None:
-            cls._definitions = {swagger_version: definitions}
-        elif swagger_version not in cls._definitions:
-            cls._definitions[swagger_version] = definitions
-        else:
-            definitions = cls._definitions[swagger_version]
+        if 'swagger_version' in kwargs and kwargs['swagger_version'] is not None:
+            schema_type = kwargs['swagger_version']
 
         if cls is JsonSchemaMixin:
-            for subclass in cls.__subclasses__():
-                definitions.update(subclass.json_schema(embeddable=True, swagger_version=swagger_version))
-            return definitions
+            warnings.warn(
+                "Calling 'JsonSchemaMixin.json_schema' is deprecated. Use 'JsonSchemaMixin.all_json_schemas' instead",
+                DeprecationWarning
+            )
+            return cls.all_json_schemas(schema_type)
 
-        if swagger_version is not None and not embeddable:
-            swagger_version = None
-            warnings.warn("'swagger_version' ignored when 'embeddable=False'")
+        definitions: JsonDict = {}
+        if cls._definitions is None:
+            cls._definitions = {schema_type: definitions}
+        elif schema_type not in cls._definitions:
+            cls._definitions[schema_type] = definitions
+        else:
+            definitions = cls._definitions[schema_type]
 
-        if cls._schema is not None and swagger_version in cls._schema:
-            schema = cls._schema[swagger_version]
+        if schema_type in (SchemaType.SWAGGER_V3, SchemaType.SWAGGER_V2) and not embeddable:
+            schema_type = SchemaType.DRAFT_06
+            warnings.warn("'Swagger schema types unsupported when 'embeddable=False', using 'SchemaType.DRAFT_06'")
+
+        if cls._schema is not None and schema_type in cls._schema:
+            schema = cls._schema[schema_type]
         else:
             properties = {}
             required = []
@@ -362,8 +436,8 @@ class JsonSchemaMixin:
                 if field.startswith("_"):
                     continue
                 mapped_field = cls.field_mapping().get(field, field)
-                properties[mapped_field], is_required = cls._get_field_schema(field_type, swagger_version)
-                cls._get_field_definitions(field_type, definitions, swagger_version)
+                properties[mapped_field], is_required = cls._get_field_schema(field_type, schema_type)
+                cls._get_field_definitions(field_type, definitions, schema_type)
                 if is_required:
                     required.append(mapped_field)
             schema = {
@@ -371,6 +445,8 @@ class JsonSchemaMixin:
                 'required': required,
                 'properties': properties
             }
+
+            # Needed for Draft 04 backwards compatibility
             if len(required) == 0:
                 del schema["required"]
             if cls.__doc__:
@@ -379,22 +455,23 @@ class JsonSchemaMixin:
             if cls._schema is None:
                 cls._schema = {}
 
-            cls._schema[swagger_version] = schema
+            cls._schema[schema_type] = schema
 
         if embeddable:
             return {**definitions, cls.__name__: schema}
         else:
-            return {**schema, **{
-                'definitions': definitions,
-                '$schema': 'http://json-schema.org/draft-04/schema#'
-            }}
+            schema_uri = 'http://json-schema.org/draft-06/schema#'
+            if schema_type == SchemaType.DRAFT_04:
+                schema_uri = 'http://json-shema.org/draft-04/schema#'
+
+            return {**schema, **{'definitions': definitions, '$schema': schema_uri}}
 
     @staticmethod
-    def _get_field_type_name(field_type: Any) -> Optional[str]:
+    def _get_field_type_name(field_type: Any) -> str:
         try:
             return field_type.__name__
         except AttributeError:
-            try:
-                return field_type._name
-            except AttributeError:
-                return None
+            # The types in the 'typing' module lack the __name__ attribute
+            match = re.match(r'typing\.([A-Za-z]+)', str(field_type))
+            assert match is not None, "Failed to get field type name: {}".format(str(field_type))
+            return match.group(1)
