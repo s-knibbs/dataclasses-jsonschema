@@ -1,13 +1,9 @@
 from uuid import UUID
 
-from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList
+from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, JsonSchemaMixin
 import pytest
-try:
-    from valico import ValidationError
-except ImportError:
-    from jsonschema import ValidationError
 
-from dataclasses_jsonschema import JsonSchemaMixin, SwaggerSpecVersion
+from dataclasses_jsonschema import SchemaType, ValidationError
 
 
 FOO_SCHEMA = {
@@ -27,7 +23,7 @@ FOO_SCHEMA = {
 }
 
 
-SWAGGER_FOO_SCHEMA = {
+SWAGGER_V2_FOO_SCHEMA = {
     'description': 'A foo that foos',
     'properties': {
         'a': {'format': 'date-time', 'type': 'string'},
@@ -42,6 +38,26 @@ SWAGGER_FOO_SCHEMA = {
         'g': {'type': 'array', 'items': {'type': 'string'}},
         'e': {'type': 'string', 'minLength': 5, 'maxLength': 8},
         'h': {'$ref': '#/definitions/Point'}
+    },
+    'type': 'object',
+    'required': ['a', 'c', 'd', 'f', 'g']
+}
+
+SWAGGER_V3_FOO_SCHEMA = {
+    'description': 'A foo that foos',
+    'properties': {
+        'a': {'format': 'date-time', 'type': 'string'},
+        'b': {'items': {'$ref': '#/components/schemas/Point'}, 'type': 'array'},
+        'c': {'additionalProperties': {'type': 'integer'}, 'type': 'object'},
+        'd': {
+            'type': 'string',
+            'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+            'x-enum-name': 'Weekday'
+        },
+        'f': {'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': [{'type': 'string'}, {'type': 'integer'}]},
+        'g': {'type': 'array', 'items': {'type': 'string'}},
+        'e': {'type': 'string', 'minLength': 5, 'maxLength': 8},
+        'h': {'$ref': '#/components/schemas/Point'}
     },
     'type': 'object',
     'required': ['a', 'c', 'd', 'f', 'g']
@@ -102,25 +118,49 @@ PRODUCT_LIST_SCHEMA = {
     'type': 'object',
     'required': ['products']
 }
+BAR_SCHEMA = {
+    'type': 'object',
+    'description': "Type with union field",
+    'properties': {
+        'a': {
+            'oneOf': [
+                {'type': 'string', 'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']},
+                {'$ref': '#/definitions/Point'}
+            ]
+        }
+    },
+    'required': ['a']
+}
 
 
 def test_embeddable_json_schema():
     expected = {'Point': POINT_SCHEMA, 'Foo': FOO_SCHEMA}
     assert expected == Foo.json_schema(embeddable=True)
-    expected = {'Point': POINT_SCHEMA, 'Foo': SWAGGER_FOO_SCHEMA,
-                'Recursive': RECURSIVE_SCHEMA, 'OpaqueData': OPAQUE_DATA_SCHEMA,
-                'Product': PRODUCT_SCHEMA, 'ShoppingCart': SHOPPING_CART_SCHEMA,
-                'ProductList': PRODUCT_LIST_SCHEMA}
-    assert expected == JsonSchemaMixin.json_schema(swagger_version=SwaggerSpecVersion.V2)
+    expected = {'Point': POINT_SCHEMA, 'Foo': SWAGGER_V2_FOO_SCHEMA}
+    assert expected == SubSchemas.all_json_schemas(schema_type=SchemaType.SWAGGER_V2)
+    expected = {'Point': POINT_SCHEMA, 'Foo': SWAGGER_V3_FOO_SCHEMA}
+    assert expected == SubSchemas.all_json_schemas(schema_type=SchemaType.SWAGGER_V3)
+    expected = {
+        'Point': POINT_SCHEMA,
+        'Foo': FOO_SCHEMA,
+        'Recursive': RECURSIVE_SCHEMA,
+        'Product': PRODUCT_SCHEMA,
+        'ProductList': PRODUCT_LIST_SCHEMA,
+        'Bar': BAR_SCHEMA,
+        'ShoppingCart': SHOPPING_CART_SCHEMA,
+        'OpaqueData': OPAQUE_DATA_SCHEMA,
+    }
+    assert expected == JsonSchemaMixin.all_json_schemas()
+    with pytest.warns(DeprecationWarning):
+        assert expected == JsonSchemaMixin.json_schema()
 
 
 def test_json_schema():
     definitions = {'Point': POINT_SCHEMA}
     schema = {**FOO_SCHEMA, **{
         'definitions': definitions,
-        '$schema': 'http://json-schema.org/draft-04/schema#'
-    }
-              }
+        '$schema': 'http://json-schema.org/draft-06/schema#'
+    }}
     assert schema == Foo.json_schema()
 
 
@@ -185,3 +225,26 @@ def test_non_string_keys():
     expected_data = {"products": {"462b92e8-b3f7-4cb7-ae93-18e829c7e10d": {"name": "hammer", "cost": 25.10}}}
     assert p.to_dict() == expected_data
     assert ProductList.from_dict(expected_data) == p
+
+
+def test_type_union_schema():
+    expected_schema = {
+        **BAR_SCHEMA,
+        'definitions': {'Point': POINT_SCHEMA},
+        '$schema': 'http://json-schema.org/draft-06/schema#'
+    }
+    assert expected_schema == Bar.json_schema()
+
+    # Should throw an error with SchemaType.SWAGGER_V2
+    with pytest.raises(TypeError):
+        Bar.json_schema(embeddable=True, schema_type=SchemaType.SWAGGER_V2)
+
+
+def test_type_union_serialise():
+    assert Bar(a=Weekday.MON).to_dict() == {'a': 'Monday'}
+    assert Bar(a=Point(x=1.25, y=3.5)).to_dict() == {'a': {'z': 1.25, 'y': 3.5}}
+
+
+def test_type_union_deserialise():
+    assert Bar.from_dict({'a': 'Friday'}) == Bar(a=Weekday.FRI)
+    assert Bar.from_dict({'a': {'z': 3.6, 'y': 10.1}}) == Bar(a=Point(x=3.6, y=10.1))

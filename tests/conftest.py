@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, NewType, Any, Tuple
+from typing import Optional, List, Dict, NewType, Any, Tuple, Union
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
@@ -19,6 +19,10 @@ class PostcodeField(FieldEncoder):
 JsonSchemaMixin.register_field_encoders({Postcode: PostcodeField()})
 
 
+class SubSchemas(JsonSchemaMixin):
+    pass
+
+
 class Weekday(Enum):
     MON = 'Monday'
     TUE = 'Tuesday'
@@ -27,8 +31,8 @@ class Weekday(Enum):
     FRI = 'Friday'
 
 
-@dataclass
-class Point(JsonSchemaMixin):
+@dataclass(eq=True)
+class Point(SubSchemas):
     x: float
     y: float
 
@@ -41,7 +45,7 @@ NewPoint = NewType('NewPoint', Point)
 
 
 @dataclass
-class Foo(JsonSchemaMixin):
+class Foo(SubSchemas):
     """A foo that foos"""
     a: datetime
     b: Optional[List[Point]]
@@ -51,6 +55,12 @@ class Foo(JsonSchemaMixin):
     g: Tuple[str, ...]
     e: Optional[Postcode] = None
     h: Optional[NewPoint] = None
+
+
+@dataclass(eq=True)
+class Bar(JsonSchemaMixin):
+    """Type with union field"""
+    a: Union[Weekday, Point]
 
 
 @dataclass
