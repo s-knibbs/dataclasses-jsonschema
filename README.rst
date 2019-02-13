@@ -63,5 +63,5 @@ For more examples `see the tests <https://github.com/s-knibbs/dataclasses-jsonsc
 
 TODO
 ----
-
-* Support type Union using 'oneOf'
+* Support field default values, currently only a default value of `None` will work
+* Support fields with `init=False` (see https://docs.python.org/3/library/dataclasses.html#dataclasses.field). Currently this will result in an error when decoding data containing one of these fields.
