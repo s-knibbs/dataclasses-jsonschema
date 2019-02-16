@@ -80,7 +80,7 @@ class OpaqueData(JsonSchemaMixin):
 @dataclass
 class Product(JsonSchemaMixin):
     name: str
-    cost: float
+    cost: float = 20.0
 
 
 @dataclass
