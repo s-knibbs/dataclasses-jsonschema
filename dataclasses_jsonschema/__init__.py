@@ -302,10 +302,11 @@ class JsonSchemaMixin:
     def _get_field_schema(cls, field: Union[Field, Type], schema_type: SchemaType) -> Tuple[JsonDict, bool]:
         field_schema: JsonDict = {'type': 'object'}
         required = True
+        default = None
         if isinstance(field, Field):
             field_type = field.type
             if field.default is not MISSING and field.default is not None:
-                field_schema['default'] = cls._decode_field(field.name, field.type, field.default)
+                default = cls._decode_field(field.name, field.type, field.default)
                 required = False
         else:
             field_type = field
@@ -367,6 +368,9 @@ class JsonSchemaMixin:
                 field_schema, _ = cls._get_field_schema(field_type.__supertype__, schema_type)
             else:
                 warnings.warn(f"Unable to create schema for '{field_type_name}'")
+
+            if default is not None:
+                field_schema['default'] = default
         return field_schema, required
 
     @classmethod
