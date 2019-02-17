@@ -7,8 +7,15 @@ Dataclasses JSON Schema
 .. image:: https://badge.fury.io/py/dataclasses-jsonschema.svg
     :target: https://badge.fury.io/py/dataclasses-jsonschema
 
-JSON schema generation from python 3.7 dataclasses. Python 3.6 is supported through the dataclasses backport.
-Also provides serialisation to and from JSON data with JSON schema validation.
+.. image:: https://img.shields.io/lgtm/grade/python/g/s-knibbs/dataclasses-jsonschema.svg?logo=lgtm&logoWidth=18
+    :target: https://lgtm.com/projects/g/s-knibbs/dataclasses-jsonschema/context:python
+    :alt:    Language grade: Python
+
+A lightweight library to generate JSON Schema from python 3.7 dataclasses. Python 3.6 is supported through the `dataclasses backport <https://github.com/ericvsmith/dataclasses>`_. Also supports the following features:
+
+* Generate schemas that can be embedded into Swagger 2.0 and 3.0 specs
+* Serialisation and deserialisation
+* Data validation against the generated schema
 
 Installation
 ------------
@@ -16,6 +23,12 @@ Installation
 .. code:: bash
 
     ~$ pip install dataclasses-jsonschema
+
+For improved validation performance using `PyValico <https://github.com/s-knibbs/pyvalico>`_, install with:
+
+.. code:: bash
+
+    ~$ pip install dataclasses-jsonschema[fast-validation]
 
 Examples
 --------
@@ -49,6 +62,12 @@ Generate the schema:
         'required': ['x', 'y']
     }
 
+Serialise data:
+
+.. code:: python
+
+    >>> Point(x=3.5, y=10.1).to_dict()
+    {'x': 3.5, 'y': 10.1}
 
 Deserialise data:
 
@@ -59,8 +78,25 @@ Deserialise data:
     >>> Point.from_dict({'x': 3.14, y: 'wrong'})
     dataclasses_jsonschema.ValidationError: 'wrong' is not of type 'number'
 
-For more examples `see the tests <https://github.com/s-knibbs/dataclasses-jsonschema/blob/master/tests/conftest.py>`_
+Custom validation rules can be added using `NewType <https://docs.python.org/3/library/typing.html#newtype>`_:
 
-TODO
-----
-* Support fields with `init=False` (see https://docs.python.org/3/library/dataclasses.html#dataclasses.field). Currently this will result in an error when decoding data containing one of these fields.
+.. code:: python
+
+    from dataclasses_jsonschema import JsonSchemaMixin, FieldEncoder
+
+    PhoneNumber = NewType('PhoneNumber', str)
+    
+    class PhoneNumberField(FieldEncoder):
+    
+        @property
+        def json_schema(self):
+            return {'type': 'string', 'pattern': r'^(\([0-9]{3}\))?[0-9]{3}-[0-9]{4}$'}
+    
+    JsonSchemaMixin.register_field_encoders({PhoneNumber: PhoneNumberField()})
+    
+    @dataclass
+    class Person(JsonSchemaMixin):
+        name: str
+        phone_number: PhoneNumber
+
+For more examples `see the tests <https://github.com/s-knibbs/dataclasses-jsonschema/blob/master/tests/conftest.py>`_
