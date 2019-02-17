@@ -283,16 +283,23 @@ class JsonSchemaMixin:
 
         if cls._decode_cache is None:
             cls._decode_cache = {}
-        decoded_data = {}
+        init_values: Dict[str, Any] = {}
+        non_init_values: Dict[str, Any] = {}
         if validate:
             try:
                 validator.validate(data, cls.json_schema())
             except validator.ValidationError as e:
                 raise ValidationError(str(e)) from e
+
         for field, target_field in cls._get_fields():
-            decoded_data[field.name] = cls._decode_field(field.name, field.type, data.get(target_field, field.default))
+            values = init_values if field.init else non_init_values
+            values[field.name] = cls._decode_field(field.name, field.type, data.get(target_field, field.default))
+
         # Need to ignore the type error here, since mypy doesn't know that subclasses are dataclasses
-        return cls(**decoded_data)  # type: ignore
+        instance = cls(**init_values)  # type: ignore
+        for field_name, value in non_init_values.items():
+            setattr(instance, field_name, value)
+        return instance
 
     @staticmethod
     def _is_json_schema_subclass(field_type) -> bool:
