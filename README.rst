@@ -13,7 +13,7 @@ Dataclasses JSON Schema
 
 A lightweight library to generate JSON Schema from python 3.7 dataclasses. Python 3.6 is supported through the `dataclasses backport <https://github.com/ericvsmith/dataclasses>`_. Also supports the following features:
 
-* Generate schemas that can be embedded into Swagger 2.0 and 3.0 specs
+* Generate schemas that can be embedded into Swagger / OpenAPI 2.0 and 3.0 specs
 * Serialisation and deserialisation
 * Data validation against the generated schema
 
@@ -78,6 +78,39 @@ Deserialise data:
     >>> Point.from_dict({'x': 3.14, y: 'wrong'})
     dataclasses_jsonschema.ValidationError: 'wrong' is not of type 'number'
 
+Generate a schema for embedding into an API spec:
+
+.. code:: python
+
+    from dataclasses_jsonschema import JsonSchemaMixin, SchemaType
+    
+    @dataclass
+    class Address(JsonSchemaMixin):
+        """Postal Address"""
+        building: str
+        street: str
+        city: str
+    
+    @dataclass
+    class Company(JsonSchemaMixin):
+        """Company Details"""
+        name: str
+        address: Address
+    
+    >>> pprint(JsonSchemaMixin.all_json_schemas(schema_type=SchemaType.SWAGGER_V3))
+    {'Address': {'description': 'Postal Address',
+                 'properties': {'building': {'type': 'string'},
+                                'city': {'type': 'string'},
+                                'street': {'type': 'string'}},
+                 'required': ['building', 'street', 'city'],
+                 'type': 'object'},
+     'Company': {'description': 'Company Details',
+                 'properties': {'address': {'$ref': '#/components/schemas/Address'},
+                                'name': {'type': 'string'}},
+                 'required': ['name', 'address'],
+                 'type': 'object'}}
+        
+
 Custom validation rules can be added using `NewType <https://docs.python.org/3/library/typing.html#newtype>`_:
 
 .. code:: python
@@ -100,3 +133,8 @@ Custom validation rules can be added using `NewType <https://docs.python.org/3/l
         phone_number: PhoneNumber
 
 For more examples `see the tests <https://github.com/s-knibbs/dataclasses-jsonschema/blob/master/tests/conftest.py>`_
+
+TODO
+----
+
+* Add benchmarks against alternatives such as `pydantic <https://github.com/samuelcolvin/pydantic>`_ and `marshmallow <https://github.com/marshmallow-code/marshmallow>`_
