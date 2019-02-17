@@ -96,9 +96,9 @@ OPAQUE_DATA_SCHEMA = {
 
 PRODUCT_SCHEMA = {
     'description': Product.__doc__,
-    'properties': {'cost': {'type': 'number'},
+    'properties': {'cost': {'type': 'number', 'default': 20.0},
                    'name': {'type': 'string'}},
-    'required': ['name', 'cost'],
+    'required': ['name'],
     'type': 'object'
 }
 
@@ -248,3 +248,7 @@ def test_type_union_serialise():
 def test_type_union_deserialise():
     assert Bar.from_dict({'a': 'Friday'}) == Bar(a=Weekday.FRI)
     assert Bar.from_dict({'a': {'z': 3.6, 'y': 10.1}}) == Bar(a=Point(x=3.6, y=10.1))
+
+
+def test_default_values():
+    assert Product(name="hammer", cost=20.0) == Product.from_dict({"name": "hammer"})
