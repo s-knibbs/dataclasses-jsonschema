@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, NewType, Any, Tuple, Union
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
 from uuid import UUID
@@ -50,7 +50,7 @@ class Foo(SubSchemas):
     a: datetime
     b: Optional[List[Point]]
     c: Dict[str, int]
-    d: Weekday
+    d: Weekday = field(init=False)
     f: Tuple[str, int]
     g: Tuple[str, ...]
     e: Optional[Postcode] = None
