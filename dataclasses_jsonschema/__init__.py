@@ -229,18 +229,20 @@ class JsonSchemaMixin:
 
     @classmethod
     def _decode_field(cls, field: str, field_type: Any, value: Any) -> Any:
-        if (type(value) in JSON_ENCODABLE_TYPES and field_type in JSON_ENCODABLE_TYPES) or value is None:
-            return value
+        if value is None:
+            return None
         decoder = None
         try:
             decoder = cls._decode_cache[field_type]  # type: ignore
         except (KeyError, TypeError):
+            if type(value) in JSON_ENCODABLE_TYPES and field_type in JSON_ENCODABLE_TYPES:
+                return value
             if cls._decode_cache is None:
                 cls._decode_cache = {}
             # Replace any nested dictionaries with their targets
             field_type_name = cls._get_field_type_name(field_type)
             if cls._is_json_schema_subclass(field_type):
-                def decoder(_, ft, val): return ft.from_dict(val)
+                def decoder(_, ft, val): return ft.from_dict(val, validate=False)
             elif is_optional(field_type):
                 def decoder(f, ft, val): return cls._decode_field(f, ft.__args__[0], val)
             elif field_type_name == 'Union':
@@ -297,7 +299,8 @@ class JsonSchemaMixin:
 
         for field, target_field in cls._get_fields():
             values = init_values if field.init else non_init_values
-            values[field.name] = cls._decode_field(field.name, field.type, data.get(target_field, field.default))
+            default = None if field.default == MISSING else field.default
+            values[field.name] = cls._decode_field(field.name, field.type, data.get(target_field, default))
 
         # Need to ignore the type error here, since mypy doesn't know that subclasses are dataclasses
         instance = cls(**init_values)  # type: ignore
