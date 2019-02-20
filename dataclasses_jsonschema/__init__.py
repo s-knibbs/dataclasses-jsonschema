@@ -1,4 +1,4 @@
-from typing import Optional, Type, Union, Any, Dict, cast, Tuple, List, TypeVar, get_type_hints
+from typing import Optional, Type, Union, Any, Dict, cast, Tuple, List, TypeVar, get_type_hints, Callable
 import re
 from datetime import datetime
 from dataclasses import fields, is_dataclass, Field, MISSING
@@ -102,6 +102,10 @@ class SchemaType(Enum):
 # Retained for backwards compatibility
 SwaggerSpecVersion = SchemaType
 
+
+_ValueEncoder = Callable[[Any, Any, bool], Any]
+_ValueDecoder = Callable[[str, Any, Any], Any]
+
 T = TypeVar("T", bound='JsonSchemaMixin')
 
 
@@ -114,10 +118,9 @@ class JsonSchemaMixin:
     # Cache of the generated schema
     _schema: Optional[Dict[SchemaType, JsonDict]] = None
     _definitions: Optional[Dict[SchemaType, JsonDict]] = None
-    _encode_cache: Any = None
-    _decode_cache: Any = None
-    # Cache of get_type_hints(cls)
-    _type_hints: Any = None
+    # Cache of field encode / decode functions
+    _encode_cache: Optional[Dict[Any, _ValueEncoder]] = None
+    _decode_cache: Optional[Dict[Any, _ValueDecoder]] = None
     _mapped_fields: Optional[List[Tuple[Field, str]]] = None
 
     @classmethod
@@ -143,8 +146,11 @@ class JsonSchemaMixin:
         if value is None:
             return value
         try:
-            encoder = self._encode_cache[field_type]
-        except KeyError:
+            encoder = self._encode_cache[field_type]  # type: ignore
+        except (KeyError, TypeError):
+            if self._encode_cache is None:
+                self.__class__._encode_cache = {}
+
             field_type_name = self._get_field_type_name(field_type)
             if field_type in self._field_encoders:
                 def encoder(ft, v, __): return self._field_encoders[ft].to_wire(v)
@@ -208,8 +214,6 @@ class JsonSchemaMixin:
 
         If omit_none (default True) is specified, any items with value None are removed
         """
-        if self._encode_cache is None:
-            self.__class__._encode_cache = {}  # type: ignore
         data = {}
         for field, target_field in self._get_fields():
             value = self._encode_field(field.type, getattr(self, field.name), omit_none)
@@ -229,8 +233,10 @@ class JsonSchemaMixin:
             return value
         decoder = None
         try:
-            decoder = cls._decode_cache[field_type]
-        except KeyError:
+            decoder = cls._decode_cache[field_type]  # type: ignore
+        except (KeyError, TypeError):
+            if cls._decode_cache is None:
+                cls._decode_cache = {}
             # Replace any nested dictionaries with their targets
             field_type_name = cls._get_field_type_name(field_type)
             if cls._is_json_schema_subclass(field_type):
@@ -281,8 +287,6 @@ class JsonSchemaMixin:
         if cls is JsonSchemaMixin:
             raise NotImplementedError
 
-        if cls._decode_cache is None:
-            cls._decode_cache = {}
         init_values: Dict[str, Any] = {}
         non_init_values: Dict[str, Any] = {}
         if validate:
