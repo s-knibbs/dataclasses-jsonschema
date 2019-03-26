@@ -324,9 +324,9 @@ class JsonSchemaMixin:
             if field.default is not MISSING and field.default is not None:
                 # In case of default value given
                 default_value = field.default
-            elif field.default_factory is not MISSING and field.default_factory is not None:
+            elif field.default_factory is not MISSING and field.default_factory is not None:  # type: ignore
                 # In case of a default factory given, we call it
-                default_value = field.default_factory()
+                default_value = field.default_factory()  # type: ignore
 
             if default_value is not None:
                 default = cls._encode_field(field.type, default_value, omit_none=False)
