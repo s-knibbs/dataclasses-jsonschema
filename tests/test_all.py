@@ -1,3 +1,5 @@
+from dataclasses import dataclass, field
+from typing import List
 from uuid import UUID
 
 from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, \
@@ -8,10 +10,10 @@ from dataclasses_jsonschema import SchemaType, ValidationError
 
 try:
     import valico as _
+
     have_valico = True
 except ImportError:
     have_valico = False
-
 
 FOO_SCHEMA = {
     'description': 'A foo that foos',
@@ -28,7 +30,6 @@ FOO_SCHEMA = {
     'type': 'object',
     'required': ['a', 'c', 'd', 'f', 'g']
 }
-
 
 SWAGGER_V2_FOO_SCHEMA = {
     'description': 'A foo that foos',
@@ -142,7 +143,7 @@ ZOO_SCHEMA = {
     'type': 'object',
     'description': "A zoo",
     'properties': {
-        'animal_types': {'additionalProperties': {'type': 'string'}, 'type': 'object'}
+        'animal_types': {'additionalProperties': {'type': 'string'}, 'type': 'object', 'default': {}}
     }
 }
 BAZ_SCHEMA = {
@@ -286,3 +287,15 @@ def test_type_union_deserialise():
 
 def test_default_values():
     assert Product(name="hammer", cost=20.0) == Product.from_dict({"name": "hammer"})
+
+
+def test_default_factory():
+    @dataclass
+    class ClassTest(JsonSchemaMixin):
+        attri: List[str] = field(default_factory=lambda: ['val'])
+
+    assert 'required' not in ClassTest.json_schema().keys()
+
+    assert ClassTest().attri == ['val']
+    assert ClassTest().to_dict() == {'attri': ['val']}
+    assert ClassTest.from_dict({}).attri == ['val']

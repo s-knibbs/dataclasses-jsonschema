@@ -320,8 +320,16 @@ class JsonSchemaMixin:
         default = None
         if isinstance(field, Field):
             field_type = field.type
+            default_value = None
             if field.default is not MISSING and field.default is not None:
-                default = cls._encode_field(field.type, field.default, omit_none=False)
+                # In case of default value given
+                default_value = field.default
+            elif field.default_factory is not MISSING and field.default_factory is not None:
+                # In case of a default factory given, we call it
+                default_value = field.default_factory()
+
+            if default_value is not None:
+                default = cls._encode_field(field.type, default_value, omit_none=False)
                 required = False
         else:
             field_type = field
