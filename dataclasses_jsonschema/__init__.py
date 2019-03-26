@@ -142,20 +142,21 @@ class JsonSchemaMixin:
         else:
             cls._field_encoders.update(field_encoders)
 
-    def _encode_field(self, field_type: Any, value: Any, omit_none: bool) -> Any:
+    @classmethod
+    def _encode_field(cls, field_type: Any, value: Any, omit_none: bool) -> Any:
         if value is None:
             return value
         try:
-            encoder = self._encode_cache[field_type]  # type: ignore
+            encoder = cls._encode_cache[field_type]  # type: ignore
         except (KeyError, TypeError):
-            if self._encode_cache is None:
-                self.__class__._encode_cache = {}
+            if cls._encode_cache is None:
+                cls._encode_cache = {}
 
-            field_type_name = self._get_field_type_name(field_type)
-            if field_type in self._field_encoders:
-                def encoder(ft, v, __): return self._field_encoders[ft].to_wire(v)
+            field_type_name = cls._get_field_type_name(field_type)
+            if field_type in cls._field_encoders:
+                def encoder(ft, v, __): return cls._field_encoders[ft].to_wire(v)
             elif is_optional(field_type):
-                def encoder(ft, val, o): return self._encode_field(ft.__args__[0], val, o)
+                def encoder(ft, val, o): return cls._encode_field(ft.__args__[0], val, o)
             elif is_enum(field_type):
                 def encoder(_, v, __): return v.value
             elif field_type_name == 'Union':
@@ -165,7 +166,7 @@ class JsonSchemaMixin:
                 encoded = None
                 for variant in field_type.__args__:
                     try:
-                        encoded = self._encode_field(variant, value, omit_none)
+                        encoded = cls._encode_field(variant, value, omit_none)
                         break
                     except (TypeError, AttributeError):
                         continue
@@ -175,23 +176,23 @@ class JsonSchemaMixin:
             elif field_type_name in ('Mapping', 'Dict'):
                 def encoder(ft, val, o):
                     return {
-                        self._encode_field(ft.__args__[0], k, o): self._encode_field(ft.__args__[1], v, o)
+                        cls._encode_field(ft.__args__[0], k, o): cls._encode_field(ft.__args__[1], v, o)
                         for k, v in val.items()
                     }
             elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
-                def encoder(ft, val, o): return [self._encode_field(ft.__args__[0], v, o) for v in val]
+                def encoder(ft, val, o): return [cls._encode_field(ft.__args__[0], v, o) for v in val]
             elif field_type_name == 'Tuple':
                 def encoder(ft, val, o):
-                    return [self._encode_field(ft.__args__[idx], v, o) for idx, v in enumerate(val)]
-            elif self._is_json_schema_subclass(field_type):
+                    return [cls._encode_field(ft.__args__[idx], v, o) for idx, v in enumerate(val)]
+            elif cls._is_json_schema_subclass(field_type):
                 # Only need to validate at the top level
                 def encoder(_, v, o): return v.to_dict(omit_none=o, validate=False)
             elif hasattr(field_type, "__supertype__"):  # NewType field
                 def encoder(ft, v, o):
-                    return self._encode_field(ft.__supertype__, v, o)
+                    return cls._encode_field(ft.__supertype__, v, o)
             else:
                 def encoder(_, v, __): return v
-            self.__class__._encode_cache[field_type] = encoder  # type: ignore
+            cls._encode_cache[field_type] = encoder  # type: ignore
         return encoder(field_type, value, omit_none)
 
     @classmethod
@@ -299,8 +300,8 @@ class JsonSchemaMixin:
 
         for field, target_field in cls._get_fields():
             values = init_values if field.init else non_init_values
-            default = None if field.default == MISSING else field.default
-            values[field.name] = cls._decode_field(field.name, field.type, data.get(target_field, default))
+            if target_field in data or (field.default == MISSING and field.default_factory == MISSING):  # type: ignore
+                values[field.name] = cls._decode_field(field.name, field.type, data.get(target_field))
 
         # Need to ignore the type error here, since mypy doesn't know that subclasses are dataclasses
         instance = cls(**init_values)  # type: ignore
@@ -320,7 +321,7 @@ class JsonSchemaMixin:
         if isinstance(field, Field):
             field_type = field.type
             if field.default is not MISSING and field.default is not None:
-                default = cls._decode_field(field.name, field.type, field.default)
+                default = cls._encode_field(field.type, field.default, omit_none=False)
                 required = False
         else:
             field_type = field
@@ -383,8 +384,9 @@ class JsonSchemaMixin:
             else:
                 warnings.warn(f"Unable to create schema for '{field_type_name}'")
 
-            if default is not None:
-                field_schema['default'] = default
+        if default is not None:
+            field_schema['default'] = default
+
         return field_schema, required
 
     @classmethod
