@@ -1,4 +1,3 @@
-from pprint import pprint
 from uuid import UUID
 
 from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, \
@@ -6,6 +5,12 @@ from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, 
 import pytest
 
 from dataclasses_jsonschema import SchemaType, ValidationError
+
+try:
+    import valico as _
+    have_valico = True
+except ImportError:
+    have_valico = False
 
 
 FOO_SCHEMA = {
@@ -154,6 +159,8 @@ def test_field_with_default_factory():
     )
 
 
+# TODO: Investigate this / raise an issue on https://github.com/rustless/valico
+@pytest.mark.skipif(have_valico, reason="Skipped due to valico bug")
 def test_field_with_default_dataclass():
     assert Baz(a=Point(0.0, 0.0)) == Baz.from_dict({})
 

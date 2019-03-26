@@ -138,3 +138,20 @@ TODO
 ----
 
 * Add benchmarks against alternatives such as `pydantic <https://github.com/samuelcolvin/pydantic>`_ and `marshmallow <https://github.com/marshmallow-code/marshmallow>`_
+
+
+KNOWN ISSUES
+------------
+
+The following will currently fail when installed alongside ``pyvalico==0.0.2``
+
+.. code:: python
+
+    @dataclass
+    class Baz(JsonSchemaMixin):
+        """Type with nested default value"""
+        a: Point = field(default=Point(0.0, 0.0))
+
+    Baz.from_dict({})
+
+The workaround is to pin pyvalico to v0.0.1
