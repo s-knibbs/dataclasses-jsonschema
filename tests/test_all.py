@@ -1,6 +1,8 @@
+from pprint import pprint
 from uuid import UUID
 
-from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, JsonSchemaMixin
+from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, \
+    JsonSchemaMixin, Zoo, Baz
 import pytest
 
 from dataclasses_jsonschema import SchemaType, ValidationError
@@ -131,6 +133,29 @@ BAR_SCHEMA = {
     },
     'required': ['a']
 }
+ZOO_SCHEMA = {
+    'type': 'object',
+    'description': "A zoo",
+    'properties': {
+        'animal_types': {'additionalProperties': {'type': 'string'}, 'type': 'object'}
+    }
+}
+BAZ_SCHEMA = {
+    'description': 'Type with nested default value',
+    'properties': {'a': {'$ref': '#/definitions/Point', 'default': {'z': 0.0, 'y': 0.0}}},
+    'type': 'object'
+}
+
+
+def test_field_with_default_factory():
+    assert Zoo(animal_types={}) == Zoo.from_dict({})
+    assert Zoo(animal_types={"snake": "reptile", "dog": "mammal"}) == Zoo.from_dict(
+        {"animal_types": {"snake": "reptile", "dog": "mammal"}}
+    )
+
+
+def test_field_with_default_dataclass():
+    assert Baz(a=Point(0.0, 0.0)) == Baz.from_dict({})
 
 
 def test_embeddable_json_schema():
@@ -149,6 +174,8 @@ def test_embeddable_json_schema():
         'Bar': BAR_SCHEMA,
         'ShoppingCart': SHOPPING_CART_SCHEMA,
         'OpaqueData': OPAQUE_DATA_SCHEMA,
+        'Zoo': ZOO_SCHEMA,
+        'Baz': BAZ_SCHEMA
     }
     assert expected == JsonSchemaMixin.all_json_schemas()
     with pytest.warns(DeprecationWarning):

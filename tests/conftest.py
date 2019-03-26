@@ -64,6 +64,12 @@ class Bar(JsonSchemaMixin):
 
 
 @dataclass
+class Baz(JsonSchemaMixin):
+    """Type with nested default value"""
+    a: Point = field(default=Point(0.0, 0.0))
+
+
+@dataclass
 class Recursive(JsonSchemaMixin):
     """A recursive data-structure"""
     a: str
@@ -95,3 +101,9 @@ class ShoppingCart(JsonSchemaMixin):
 @dataclass
 class ProductList(JsonSchemaMixin):
     products: Dict[UUID, Product]
+
+
+@dataclass
+class Zoo(JsonSchemaMixin):
+    """A zoo"""
+    animal_types: Optional[Dict[str, str]] = field(default_factory=dict)
