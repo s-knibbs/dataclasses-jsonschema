@@ -318,6 +318,7 @@ class JsonSchemaMixin:
         field_schema: JsonDict = {'type': 'object'}
         required = True
         default = None
+        description = None
         if isinstance(field, Field):
             field_type = field.type
             default_value = None
@@ -331,6 +332,8 @@ class JsonSchemaMixin:
             if default_value is not None:
                 default = cls._encode_field(field.type, default_value, omit_none=False)
                 required = False
+            if "description" in field.metadata:
+                description = field.metadata["description"]
         else:
             field_type = field
         field_type_name = cls._get_field_type_name(field_type)
@@ -394,6 +397,8 @@ class JsonSchemaMixin:
 
         if default is not None:
             field_schema['default'] = default
+        if description is not None:
+            field_schema['description'] = description
 
         return field_schema, required
 
