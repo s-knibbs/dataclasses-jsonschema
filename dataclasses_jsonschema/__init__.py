@@ -332,7 +332,7 @@ class JsonSchemaMixin:
             if default_value is not None:
                 default = cls._encode_field(field.type, default_value, omit_none=False)
                 required = False
-            if "description" in field.metadata:
+            if field.metadata is not None and "description" in field.metadata:
                 description = field.metadata["description"]
         else:
             field_type = field
