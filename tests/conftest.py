@@ -33,8 +33,8 @@ class Weekday(Enum):
 
 @dataclass(eq=True)
 class Point(SubSchemas):
-    x: float
-    y: float
+    x: float = field(metadata=dict(description="Point x coordinate"))
+    y: float = field(metadata=dict(description="Point y coordinate"))
 
     @classmethod
     def field_mapping(cls) -> Dict[str, str]:

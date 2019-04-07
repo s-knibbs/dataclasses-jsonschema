@@ -76,8 +76,8 @@ POINT_SCHEMA = {
     'description': Point.__doc__,
     'type': 'object',
     'properties': {
-        'z': {'type': 'number'},
-        'y': {'type': 'number'}
+        'z': {'type': 'number', 'description': 'Point x coordinate'},
+        'y': {'type': 'number', 'description': 'Point y coordinate'}
     },
     'required': ['z', 'y']
 }
