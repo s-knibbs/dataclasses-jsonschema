@@ -299,3 +299,26 @@ def test_default_factory():
     assert ClassTest().attri == ['val']
     assert ClassTest().to_dict() == {'attri': ['val']}
     assert ClassTest.from_dict({}).attri == ['val']
+
+
+def test_read_only_field():
+    @dataclass
+    class Employee(JsonSchemaMixin):
+        name: str
+        department: str
+        id: int = field(metadata=dict(read_only=True), default=-1)
+
+    schema = Employee.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True)
+    assert schema['Employee']['properties']['id']['readOnly']
+    assert 'readOnly' not in Employee.json_schema(schema_type=SchemaType.DRAFT_06)['properties']['id']
+
+
+def test_read_only_field_no_default():
+    @dataclass
+    class Employee(JsonSchemaMixin):
+        name: str
+        department: str
+        id: int = field(metadata=dict(read_only=True))
+
+    with pytest.raises(ValueError):
+        Employee.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True)

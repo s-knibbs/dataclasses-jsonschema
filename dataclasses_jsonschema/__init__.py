@@ -1,7 +1,8 @@
+import functools
 from typing import Optional, Type, Union, Any, Dict, cast, Tuple, List, TypeVar, get_type_hints, Callable
 import re
 from datetime import datetime
-from dataclasses import fields, is_dataclass, Field, MISSING
+from dataclasses import fields, is_dataclass, Field, MISSING, dataclass, asdict
 from uuid import UUID
 from enum import Enum
 import warnings
@@ -97,6 +98,7 @@ class SchemaType(Enum):
     V2 = "2.0"
     # Alias of SWAGGER_V3
     V3 = "3.0"
+    OPENAPI_3 = "3.0"
 
 
 # Retained for backwards compatibility
@@ -107,6 +109,28 @@ _ValueEncoder = Callable[[Any, Any, bool], Any]
 _ValueDecoder = Callable[[str, Any, Any], Any]
 
 T = TypeVar("T", bound='JsonSchemaMixin')
+
+
+@functools.lru_cache()
+def _to_camel_case(value: str) -> str:
+    if "_" in value:
+        parts = value.split("_")
+        return "".join([parts[0]] + [part[0].upper() + part[1:] for part in parts[1:]])
+    else:
+        return value
+
+
+@dataclass
+class FieldMeta:
+    default: Any = None
+    description: Optional[str] = None
+    # OpenAPI 3 only properties
+    read_only: Optional[bool] = None
+    write_only: Optional[bool] = None
+
+    @property
+    def as_dict(self) -> Dict:
+        return {_to_camel_case(k): v for k, v in asdict(self).items() if v is not None}
 
 
 class JsonSchemaMixin:
@@ -314,28 +338,42 @@ class JsonSchemaMixin:
         return issubclass_safe(field_type, JsonSchemaMixin)
 
     @classmethod
+    def _get_field_meta(cls, field: Field, schema_type: SchemaType) -> Tuple[FieldMeta, bool]:
+        required = True
+        field_meta = FieldMeta()
+        default_value = None
+        if field.default is not MISSING and field.default is not None:
+            # In case of default value given
+            default_value = field.default
+        elif field.default_factory is not MISSING and field.default_factory is not None:  # type: ignore
+            # In case of a default factory given, we call it
+            default_value = field.default_factory()  # type: ignore
+
+        if default_value is not None:
+            field_meta.default = cls._encode_field(field.type, default_value, omit_none=False)
+            required = False
+        if field.metadata is not None:
+            if "description" in field.metadata:
+                field_meta.description = field.metadata["description"]
+            if schema_type == SchemaType.OPENAPI_3:
+                field_meta.read_only = field.metadata.get("read_only")
+                if field_meta.read_only and default_value is None:
+                    raise ValueError(f"Read-only fields must have a default value")
+                field_meta.write_only = field.metadata.get("write_only")
+        return field_meta, required
+
+    @classmethod
     def _get_field_schema(cls, field: Union[Field, Type], schema_type: SchemaType) -> Tuple[JsonDict, bool]:
         field_schema: JsonDict = {'type': 'object'}
         required = True
-        default = None
-        description = None
+
         if isinstance(field, Field):
             field_type = field.type
-            default_value = None
-            if field.default is not MISSING and field.default is not None:
-                # In case of default value given
-                default_value = field.default
-            elif field.default_factory is not MISSING and field.default_factory is not None:  # type: ignore
-                # In case of a default factory given, we call it
-                default_value = field.default_factory()  # type: ignore
-
-            if default_value is not None:
-                default = cls._encode_field(field.type, default_value, omit_none=False)
-                required = False
-            if field.metadata is not None and "description" in field.metadata:
-                description = field.metadata["description"]
+            field_meta, required = cls._get_field_meta(field, schema_type)
         else:
             field_type = field
+            field_meta = FieldMeta()
+
         field_type_name = cls._get_field_type_name(field_type)
         ref_path = '#/components/schemas' if schema_type == SchemaType.SWAGGER_V3 else '#/definitions'
         if cls._is_json_schema_subclass(field_type):
@@ -395,10 +433,7 @@ class JsonSchemaMixin:
             else:
                 warnings.warn(f"Unable to create schema for '{field_type_name}'")
 
-        if default is not None:
-            field_schema['default'] = default
-        if description is not None:
-            field_schema['description'] = description
+        field_schema.update(field_meta.as_dict)
 
         return field_schema, required
 
