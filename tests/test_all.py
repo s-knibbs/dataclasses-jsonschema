@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, \
@@ -322,3 +322,13 @@ def test_read_only_field_no_default():
 
     with pytest.raises(ValueError):
         Employee.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True)
+
+
+def test_optional_field_no_default():
+    @dataclass
+    class DatabaseModel(JsonSchemaMixin):
+        id: Optional[int]
+
+    schema = DatabaseModel.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True)
+
+    assert not hasattr(schema['DatabaseModel'], 'required')
