@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional, Union
 from uuid import UUID
 
 from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, \
@@ -19,13 +19,13 @@ FOO_SCHEMA = {
     'description': 'A foo that foos',
     'properties': {
         'a': {'format': 'date-time', 'type': 'string'},
-        'b': {'items': {'$ref': '#/definitions/Point'}, 'type': 'array'},
+        'b': {'oneOf': [{'items': {'$ref': '#/definitions/Point'}, 'type': 'array'}, {'type': 'null'}]},
         'c': {'additionalProperties': {'type': 'integer'}, 'type': 'object'},
         'd': {'type': 'string', 'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']},
         'f': {'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': [{'type': 'string'}, {'type': 'integer'}]},
         'g': {'type': 'array', 'items': {'type': 'string'}},
-        'e': {'type': 'string', 'minLength': 5, 'maxLength': 8},
-        'h': {'$ref': '#/definitions/Point'}
+        'e': {'oneOf': [{'type': 'string', 'minLength': 5, 'maxLength': 8}, {'type': 'null'}]},
+        'h': {'oneOf': [{'$ref': '#/definitions/Point'}, {'type': 'null'}]},
     },
     'type': 'object',
     'required': ['a', 'c', 'd', 'f', 'g']
@@ -35,7 +35,7 @@ SWAGGER_V2_FOO_SCHEMA = {
     'description': 'A foo that foos',
     'properties': {
         'a': {'format': 'date-time', 'type': 'string'},
-        'b': {'items': {'$ref': '#/definitions/Point'}, 'type': 'array'},
+        'b': {'oneOf': [{'items': {'$ref': '#/definitions/Point'}, 'type': 'array'}, {'type': 'null'}]},
         'c': {'additionalProperties': {'type': 'integer'}, 'type': 'object'},
         'd': {
             'type': 'string',
@@ -44,8 +44,8 @@ SWAGGER_V2_FOO_SCHEMA = {
         },
         'f': {'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': [{'type': 'string'}, {'type': 'integer'}]},
         'g': {'type': 'array', 'items': {'type': 'string'}},
-        'e': {'type': 'string', 'minLength': 5, 'maxLength': 8},
-        'h': {'$ref': '#/definitions/Point'}
+        'e': {'oneOf': [{'type': 'string', 'minLength': 5, 'maxLength': 8}, {'type': 'null'}]},
+        'h': {'oneOf': [{'$ref': '#/definitions/Point'}, {'type': 'null'}]},
     },
     'type': 'object',
     'required': ['a', 'c', 'd', 'f', 'g']
@@ -55,7 +55,7 @@ SWAGGER_V3_FOO_SCHEMA = {
     'description': 'A foo that foos',
     'properties': {
         'a': {'format': 'date-time', 'type': 'string'},
-        'b': {'items': {'$ref': '#/components/schemas/Point'}, 'type': 'array'},
+        'b': {'oneOf': [{'items': {'$ref': '#/components/schemas/Point'}, 'type': 'array'}, {'type': 'null'}]},
         'c': {'additionalProperties': {'type': 'integer'}, 'type': 'object'},
         'd': {
             'type': 'string',
@@ -64,8 +64,8 @@ SWAGGER_V3_FOO_SCHEMA = {
         },
         'f': {'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': [{'type': 'string'}, {'type': 'integer'}]},
         'g': {'type': 'array', 'items': {'type': 'string'}},
-        'e': {'type': 'string', 'minLength': 5, 'maxLength': 8},
-        'h': {'$ref': '#/components/schemas/Point'}
+        'e': {'oneOf': [{'type': 'string', 'minLength': 5, 'maxLength': 8}, {'type': 'null'}]},
+        'h': {'oneOf': [{'$ref': '#/components/schemas/Point'}, {'type': 'null'}]},
     },
     'type': 'object',
     'required': ['a', 'c', 'd', 'f', 'g']
@@ -322,3 +322,23 @@ def test_read_only_field_no_default():
 
     with pytest.raises(ValueError):
         Employee.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True)
+
+
+def test_optional_field_no_default():
+    @dataclass
+    class FooBar(JsonSchemaMixin):
+        id: Optional[int]
+
+    schema = FooBar.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True)
+
+    assert not hasattr(schema['FooBar'], 'required')
+
+
+def test_required_union_field_no_default():
+    @dataclass
+    class FooBar(JsonSchemaMixin):
+        id: Union[int]
+
+    schema = FooBar.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True)
+
+    assert 'id' in schema['FooBar']['required']

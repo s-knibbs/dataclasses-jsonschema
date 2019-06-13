@@ -17,10 +17,11 @@ JSON_ENCODABLE_TYPES = {
     str: {'type': 'string'},
     int: {'type': 'integer'},
     bool: {'type': 'boolean'},
-    float: {'type': 'number'}
+    float: {'type': 'number'},
+    type(None): {'type': 'null'},
 }
 
-JsonEncodable = Union[int, float, str, bool]
+JsonEncodable = Union[int, float, str, bool, type(None)]
 JsonDict = Dict[str, Any]
 
 
@@ -40,7 +41,12 @@ def issubclass_safe(klass: Any, base: Type):
 
 
 def is_optional(field: Any) -> bool:
-    return str(field).startswith('typing.Union') and issubclass(field.__args__[1], type(None))
+    if str(field).startswith('typing.Union'):
+        for arg in field.__args__:
+            if isinstance(arg, type) and issubclass(arg, type(None)):
+                return True
+
+    return False
 
 
 class FieldEncoder:
@@ -352,6 +358,7 @@ class JsonSchemaMixin:
         if default_value is not None:
             field_meta.default = cls._encode_field(field.type, default_value, omit_none=False)
             required = False
+
         if field.metadata is not None:
             if "description" in field.metadata:
                 field_meta.description = field.metadata["description"]
@@ -360,6 +367,7 @@ class JsonSchemaMixin:
                 if field_meta.read_only and default_value is None:
                     raise ValueError(f"Read-only fields must have a default value")
                 field_meta.write_only = field.metadata.get("write_only")
+
         return field_meta, required
 
     @classmethod
@@ -379,10 +387,18 @@ class JsonSchemaMixin:
         if cls._is_json_schema_subclass(field_type):
             field_schema = {'$ref': '{}/{}'.format(ref_path, field_type_name)}
         else:
-            # If is optional[...]
-            if is_optional(field_type):
-                field_schema = cls._get_field_schema(field_type.__args__[0], schema_type)[0]
-                required = False
+            # if Union[..., None] or Optional[...]
+            if field_type_name == 'Union':
+                field_schema = {
+                    'oneOf': [cls._get_field_schema(variant, schema_type)[0] for variant in field_type.__args__]
+                }
+
+                if is_optional(field_type):
+                    required = False
+
+                elif schema_type == SchemaType.SWAGGER_V2:
+                    raise TypeError('Type unions unsupported in Swagger 2.0')
+
             elif is_enum(field_type):
                 member_types = set()
                 values = []
@@ -401,12 +417,7 @@ class JsonSchemaMixin:
                 # Note: Unlike swagger, JSON schema does not support extensions
                 if schema_type in (SchemaType.SWAGGER_V2, SchemaType.SWAGGER_V3):
                     field_schema['x-enum-name'] = field_type_name
-            elif field_type_name == 'Union':
-                if schema_type == SchemaType.SWAGGER_V2:
-                    raise TypeError('Type unions unsupported in Swagger 2.0')
-                field_schema = {
-                    'oneOf': [cls._get_field_schema(variant, schema_type)[0] for variant in field_type.__args__]
-                }
+
             elif field_type_name in ('Dict', 'Mapping'):
                 field_schema = {'type': 'object'}
                 if field_type.__args__[1] is not Any:
