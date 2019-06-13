@@ -46,8 +46,6 @@ def is_optional(field: Any) -> bool:
             if isinstance(arg, type) and issubclass(arg, type(None)):
                 return True
 
-    # what about type == Optional[...]?
-
     return False
 
 
@@ -389,13 +387,18 @@ class JsonSchemaMixin:
         if cls._is_json_schema_subclass(field_type):
             field_schema = {'$ref': '{}/{}'.format(ref_path, field_type_name)}
         else:
-            # if Union[..., None]
-            if is_optional(field_type):
-                # field_schema = cls._get_field_schema(field_type.__args__[0], schema_type)[0]
-                required = False
+            # if Union[..., None] or Optional[...]
+            if field_type_name == 'Union':
                 field_schema = {
                     'oneOf': [cls._get_field_schema(variant, schema_type)[0] for variant in field_type.__args__]
                 }
+
+                if is_optional(field_type):
+                    required = False
+
+                elif schema_type == SchemaType.SWAGGER_V2:
+                    raise TypeError('Type unions unsupported in Swagger 2.0')
+
             elif is_enum(field_type):
                 member_types = set()
                 values = []
@@ -414,12 +417,7 @@ class JsonSchemaMixin:
                 # Note: Unlike swagger, JSON schema does not support extensions
                 if schema_type in (SchemaType.SWAGGER_V2, SchemaType.SWAGGER_V3):
                     field_schema['x-enum-name'] = field_type_name
-            elif field_type_name == 'Union':
-                if schema_type == SchemaType.SWAGGER_V2:
-                    raise TypeError('Type unions unsupported in Swagger 2.0')
-                field_schema = {
-                    'oneOf': [cls._get_field_schema(variant, schema_type)[0] for variant in field_type.__args__]
-                }
+
             elif field_type_name in ('Dict', 'Mapping'):
                 field_schema = {'type': 'object'}
                 if field_type.__args__[1] is not Any:
