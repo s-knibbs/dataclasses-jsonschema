@@ -382,6 +382,7 @@ def test_field_types():
 def test_field_metadata():
     @dataclass
     class Test(JsonSchemaMixin):
+        """Dataclass with field metadata"""
         name: str = field(
             metadata=JsonSchemaMeta(
                 title="Title of the field",
@@ -395,7 +396,7 @@ def test_field_metadata():
 
     expected_schema = {
         'type': 'object',
-        'description': 'Test(name: str)',
+        'description': 'Dataclass with field metadata',
         'properties': {
             'name': {
                 'type': 'string',
