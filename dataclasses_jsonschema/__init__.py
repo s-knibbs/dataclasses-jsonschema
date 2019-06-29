@@ -9,6 +9,8 @@ from uuid import UUID
 from enum import Enum
 import warnings
 
+from typing_extensions import Final
+
 try:
     # Supported in future python versions
     from typing import TypedDict  # type: ignore
@@ -50,7 +52,17 @@ def issubclass_safe(klass: Any, base: Type):
 
 
 def is_optional(field: Any) -> bool:
-    return str(field).startswith('typing.Union') and issubclass(field.__args__[1], type(None))
+    try:
+        return field.__origin__ == Union and issubclass(field.__args__[1], type(None))
+    except AttributeError:
+        return False
+
+
+def is_final(field: Any) -> bool:
+    try:
+        return field.__origin__ == Final
+    except AttributeError:
+        return False
 
 
 class SchemaType(Enum):
@@ -178,7 +190,7 @@ class JsonSchemaMixin:
             field_type_name = cls._get_field_type_name(field_type)
             if field_type in cls._field_encoders:
                 def encoder(ft, v, __): return cls._field_encoders[ft].to_wire(v)
-            elif is_optional(field_type):
+            elif is_optional(field_type) or is_final(field_type):
                 def encoder(ft, val, o): return cls._encode_field(ft.__args__[0], val, o)
             elif is_enum(field_type):
                 def encoder(_, v, __): return v.value
@@ -267,7 +279,7 @@ class JsonSchemaMixin:
             field_type_name = cls._get_field_type_name(field_type)
             if cls._is_json_schema_subclass(field_type):
                 def decoder(_, ft, val): return ft.from_dict(val, validate=False)
-            elif is_optional(field_type):
+            elif is_optional(field_type) or is_final(field_type):
                 def decoder(f, ft, val): return cls._decode_field(f, ft.__args__[0], val)
             elif field_type_name == 'Union':
                 # Attempt to decode the value using each decoder in turn
@@ -390,6 +402,8 @@ class JsonSchemaMixin:
             if is_optional(field_type):
                 field_schema = cls._get_field_schema(field_type.__args__[0], schema_type)[0]
                 required = False
+            elif is_final(field_type):
+                field_schema, required = cls._get_field_schema(field_type.__args__[0], schema_type)
             elif is_enum(field_type):
                 member_types = set()
                 values = []
