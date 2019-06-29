@@ -1,12 +1,14 @@
+from _decimal import Decimal
 from dataclasses import dataclass, field
-from typing import List
+from ipaddress import IPv4Address, IPv6Address
+from typing import List, NewType
 from uuid import UUID
 
 from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, \
     JsonSchemaMixin, Zoo, Baz
 import pytest
 
-from dataclasses_jsonschema import SchemaType, ValidationError
+from dataclasses_jsonschema import SchemaType, ValidationError, DecimalField
 
 try:
     import valico as _
@@ -153,6 +155,15 @@ BAZ_SCHEMA = {
 }
 
 
+def compose_schema(schema, definitions=None):
+    full_schema = {**schema, **{
+        '$schema': 'http://json-schema.org/draft-06/schema#'
+    }}
+    if definitions is not None:
+        full_schema['definitions'] = definitions
+    return full_schema
+
+
 def test_field_with_default_factory():
     assert Zoo(animal_types={}) == Zoo.from_dict({})
     assert Zoo(animal_types={"snake": "reptile", "dog": "mammal"}) == Zoo.from_dict(
@@ -192,11 +203,7 @@ def test_embeddable_json_schema():
 
 def test_json_schema():
     definitions = {'Point': POINT_SCHEMA}
-    schema = {**FOO_SCHEMA, **{
-        'definitions': definitions,
-        '$schema': 'http://json-schema.org/draft-06/schema#'
-    }}
-    assert schema == Foo.json_schema()
+    assert compose_schema(FOO_SCHEMA, definitions) == Foo.json_schema()
 
 
 def test_serialise_deserialise():
@@ -322,3 +329,51 @@ def test_read_only_field_no_default():
 
     with pytest.raises(ValueError):
         Employee.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True)
+
+
+def test_field_types():
+    Currency = NewType('Currency', Decimal)
+    JsonSchemaMixin.register_field_encoders({
+        Currency: DecimalField(precision=2)
+    })
+
+    @dataclass
+    class AllFieldTypes(JsonSchemaMixin):
+        """All field types used"""
+        ip_address: IPv4Address
+        ipv6_address: IPv6Address
+        cost: Currency
+        uuid: UUID
+
+    expected_schema = compose_schema({
+        'description': 'All field types used',
+        'type': 'object',
+        'properties': {
+            'ip_address': {'type': 'string', 'format': 'ipv4'},
+            'ipv6_address': {'type': 'string', 'format': 'ipv6'},
+            'cost': {'type': 'number', 'multipleOf': 0.01},
+            'uuid': {
+                'type': 'string',
+                'format': 'uuid',
+                'pattern': '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            }
+        },
+        'required': ['ip_address', 'ipv6_address', 'cost', 'uuid']
+    })
+
+    assert AllFieldTypes.json_schema() == expected_schema
+    expected_uuid = UUID('032bbcad-9ca2-4f36-9a63-43a036bc5755')
+    expected_obj = AllFieldTypes(
+        ip_address=IPv4Address('127.0.0.1'),
+        ipv6_address=IPv6Address('::1'),
+        cost=Currency(Decimal('49.99')),
+        uuid=expected_uuid
+    )
+    expected_dict = {
+        "ip_address": "127.0.0.1",
+        "ipv6_address": "::1",
+        "cost": 49.99,
+        "uuid": str(expected_uuid)
+    }
+    assert expected_obj == AllFieldTypes.from_dict(expected_dict)
+    assert expected_obj.to_dict() == expected_dict

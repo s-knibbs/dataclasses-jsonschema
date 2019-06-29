@@ -1,5 +1,7 @@
 import functools
-from typing import Optional, Type, Union, Any, Dict, cast, Tuple, List, TypeVar, get_type_hints, Callable
+from _decimal import Decimal
+from ipaddress import IPv4Address, IPv6Address
+from typing import Optional, Type, Union, Any, Dict, Tuple, List, TypeVar, get_type_hints, Callable
 import re
 from datetime import datetime
 from dataclasses import fields, is_dataclass, Field, MISSING, dataclass, asdict
@@ -7,7 +9,12 @@ from uuid import UUID
 from enum import Enum
 import warnings
 
-from dateutil.parser import parse
+from dataclasses_jsonschema.field_types import (  # noqa: F401
+    FieldEncoder, DateTimeFieldEncoder, UuidField, DecimalField,
+    IPv4AddressField, IPv6AddressField, DateTimeField
+)
+from dataclasses_jsonschema.type_defs import JsonDict
+
 try:
     import valico as validator
 except ImportError:
@@ -19,9 +26,6 @@ JSON_ENCODABLE_TYPES = {
     bool: {'type': 'boolean'},
     float: {'type': 'number'}
 }
-
-JsonEncodable = Union[int, float, str, bool]
-JsonDict = Dict[str, Any]
 
 
 class ValidationError(Exception):
@@ -41,52 +45,6 @@ def issubclass_safe(klass: Any, base: Type):
 
 def is_optional(field: Any) -> bool:
     return str(field).startswith('typing.Union') and issubclass(field.__args__[1], type(None))
-
-
-class FieldEncoder:
-    """Base class for encoding fields to and from JSON encodable values"""
-
-    def to_wire(self, value: Any) -> JsonEncodable:
-        return value
-
-    def to_python(self, value: JsonEncodable) -> Any:
-        return value
-
-    @property
-    def json_schema(self) -> JsonDict:
-        raise NotImplementedError()
-
-
-class DateTimeFieldEncoder(FieldEncoder):
-    """Encodes datetimes to RFC3339 format"""
-
-    def to_wire(self, value: datetime) -> str:
-        out = value.isoformat()
-
-        # Assume UTC if timezone is missing
-        if value.tzinfo is None:
-            return out + "Z"
-        return out
-
-    def to_python(self, value: JsonEncodable) -> datetime:
-        return value if isinstance(value, datetime) else parse(cast(str, value))
-
-    @property
-    def json_schema(self) -> JsonDict:
-        return {"type": "string", "format": "date-time"}
-
-
-class UuidField(FieldEncoder):
-
-    def to_wire(self, value):
-        return str(value)
-
-    def to_python(self, value):
-        return UUID(value)
-
-    @property
-    def json_schema(self):
-        return {'type': 'string', 'format': 'uuid'}
 
 
 class SchemaType(Enum):
@@ -137,7 +95,13 @@ class JsonSchemaMixin:
     """Mixin which adds methods to generate a JSON schema and
     convert to and from JSON encodable dicts with validation against the schema
     """
-    _field_encoders: Dict[Type, FieldEncoder] = {datetime: DateTimeFieldEncoder(), UUID: UuidField()}
+    _field_encoders: Dict[Type, FieldEncoder] = {
+        datetime: DateTimeFieldEncoder(),
+        UUID: UuidField(),
+        Decimal: DecimalField(),
+        IPv4Address: IPv4AddressField(),
+        IPv6Address: IPv6AddressField()
+    }
 
     # Cache of the generated schema
     _schema: Optional[Dict[SchemaType, JsonDict]] = None
@@ -532,7 +496,10 @@ class JsonSchemaMixin:
             if schema_type == SchemaType.DRAFT_04:
                 schema_uri = 'http://json-shema.org/draft-04/schema#'
 
-            return {**schema, **{'definitions': definitions, '$schema': schema_uri}}
+            full_schema = {**schema, **{'$schema': schema_uri}}
+            if len(definitions) > 0:
+                full_schema['definitions'] = definitions
+            return full_schema
 
     @staticmethod
     def _get_field_type_name(field_type: Any) -> str:
