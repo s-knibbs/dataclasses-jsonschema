@@ -3,6 +3,7 @@ from setuptools import setup
 requires = [
     'python-dateutil',
     'jsonschema',
+    'mypy_extensions',
     'dataclasses;python_version<"3.7"'
 ]
 

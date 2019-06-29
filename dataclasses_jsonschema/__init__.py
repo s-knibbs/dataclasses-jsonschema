@@ -9,6 +9,12 @@ from uuid import UUID
 from enum import Enum
 import warnings
 
+try:
+    # Supported in future python versions
+    from typing import TypedDict  # type: ignore
+except ImportError:
+    from mypy_extensions import TypedDict
+
 from dataclasses_jsonschema.field_types import (  # noqa: F401
     FieldEncoder, DateTimeFieldEncoder, UuidField, DecimalField,
     IPv4AddressField, IPv6AddressField, DateTimeField
@@ -78,17 +84,46 @@ def _to_camel_case(value: str) -> str:
         return value
 
 
+class JsonSchemaMeta(TypedDict):
+    """JSON schema field definitions. Example usage:
+
+    >>> foo = field(metadata=JsonSchemaMeta(description="A foo that foos"))
+    """
+    description: str
+    title: str
+    examples: List
+    read_only: bool
+    write_only: bool
+    # Additional extension properties that will be output prefixed with 'x-' when generating OpenAPI / Swagger schemas
+    extensions: Dict[str, Any]
+
+
 @dataclass
 class FieldMeta:
+    schema_type: SchemaType
     default: Any = None
+    examples: Optional[List] = None
     description: Optional[str] = None
+    title: Optional[str] = None
     # OpenAPI 3 only properties
     read_only: Optional[bool] = None
     write_only: Optional[bool] = None
+    extensions: Optional[Dict[str, Any]] = None
 
     @property
     def as_dict(self) -> Dict:
-        return {_to_camel_case(k): v for k, v in asdict(self).items() if v is not None}
+        schema_dict = {
+            _to_camel_case(k): v
+            for k, v in asdict(self).items()
+            if v is not None and k not in ["schema_type", "extensions"]
+        }
+        if (self.schema_type in [SchemaType.SWAGGER_V2, SchemaType.OPENAPI_3]) and self.extensions is not None:
+            schema_dict.update({'x-' + k: v for k, v in self.extensions.items()})
+        # Swagger 2 only supports a single example value per property
+        if "examples" in schema_dict and len(schema_dict["examples"]) > 0 and self.schema_type == SchemaType.SWAGGER_V2:
+            schema_dict["example"] = schema_dict["examples"][0]
+            del schema_dict["examples"]
+        return schema_dict
 
 
 class JsonSchemaMixin:
@@ -304,7 +339,7 @@ class JsonSchemaMixin:
     @classmethod
     def _get_field_meta(cls, field: Field, schema_type: SchemaType) -> Tuple[FieldMeta, bool]:
         required = True
-        field_meta = FieldMeta()
+        field_meta = FieldMeta(schema_type=schema_type)
         default_value = None
         if field.default is not MISSING and field.default is not None:
             # In case of default value given
@@ -317,12 +352,20 @@ class JsonSchemaMixin:
             field_meta.default = cls._encode_field(field.type, default_value, omit_none=False)
             required = False
         if field.metadata is not None:
+            if "examples" in field.metadata:
+                field_meta.examples = [
+                    cls._encode_field(field.type, example, omit_none=False) for example in field.metadata["examples"]
+                ]
+            if "extensions" in field.metadata:
+                field_meta.extensions = field.metadata["extensions"]
             if "description" in field.metadata:
                 field_meta.description = field.metadata["description"]
+            if "title" in field.metadata:
+                field_meta.title = field.metadata["title"]
             if schema_type == SchemaType.OPENAPI_3:
                 field_meta.read_only = field.metadata.get("read_only")
                 if field_meta.read_only and default_value is None:
-                    raise ValueError(f"Read-only fields must have a default value")
+                    warnings.warn(f"Read-only fields should have a default value")
                 field_meta.write_only = field.metadata.get("write_only")
         return field_meta, required
 
@@ -336,7 +379,7 @@ class JsonSchemaMixin:
             field_meta, required = cls._get_field_meta(field, schema_type)
         else:
             field_type = field
-            field_meta = FieldMeta()
+            field_meta = FieldMeta(schema_type=schema_type)
 
         field_type_name = cls._get_field_type_name(field_type)
         ref_path = '#/components/schemas' if schema_type == SchemaType.SWAGGER_V3 else '#/definitions'

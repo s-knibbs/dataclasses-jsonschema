@@ -8,7 +8,7 @@ from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, 
     JsonSchemaMixin, Zoo, Baz
 import pytest
 
-from dataclasses_jsonschema import SchemaType, ValidationError, DecimalField
+from dataclasses_jsonschema import SchemaType, ValidationError, DecimalField, JsonSchemaMeta
 
 try:
     import valico as _
@@ -325,9 +325,9 @@ def test_read_only_field_no_default():
     class Employee(JsonSchemaMixin):
         name: str
         department: str
-        id: int = field(metadata=dict(read_only=True))
+        id: int = field(metadata=JsonSchemaMeta(read_only=True))
 
-    with pytest.raises(ValueError):
+    with pytest.warns(UserWarning):
         Employee.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True)
 
 
@@ -377,3 +377,40 @@ def test_field_types():
     }
     assert expected_obj == AllFieldTypes.from_dict(expected_dict)
     assert expected_obj.to_dict() == expected_dict
+
+
+def test_field_metadata():
+    @dataclass
+    class Test(JsonSchemaMixin):
+        """Dataclass with field metadata"""
+        name: str = field(
+            metadata=JsonSchemaMeta(
+                title="Title of the field",
+                description="Description of the field",
+                examples=["foo", "bar"],
+                extensions={
+                    'field-group': 1
+                }
+            )
+        )
+
+    expected_schema = {
+        'type': 'object',
+        'description': 'Dataclass with field metadata',
+        'properties': {
+            'name': {
+                'type': 'string',
+                'examples': ['foo', 'bar'],
+                'title': 'Title of the field',
+                'description': 'Description of the field'
+            }
+        },
+        'required': ['name']
+    }
+    expected_full_schema = compose_schema(expected_schema)
+    assert Test.json_schema() == expected_full_schema
+    expected_schema['properties']['name']['x-field-group'] = 1
+    assert Test.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True) == {'Test': expected_schema}
+    expected_schema['properties']['name']['example'] = 'foo'
+    del expected_schema['properties']['name']['examples']
+    assert Test.json_schema(schema_type=SchemaType.SWAGGER_V2, embeddable=True) == {'Test': expected_schema}
