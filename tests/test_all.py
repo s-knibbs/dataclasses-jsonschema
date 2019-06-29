@@ -2,6 +2,7 @@ from _decimal import Decimal
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address
 from typing import List, NewType
+from typing_extensions import Final
 from uuid import UUID
 
 from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, \
@@ -414,3 +415,24 @@ def test_field_metadata():
     expected_schema['properties']['name']['example'] = 'foo'
     del expected_schema['properties']['name']['examples']
     assert Test.json_schema(schema_type=SchemaType.SWAGGER_V2, embeddable=True) == {'Test': expected_schema}
+
+
+def test_final_field():
+
+    @dataclass
+    class TestWithFinal(JsonSchemaMixin):
+        """Dataclass with final field"""
+        name: Final[str]
+
+    expected_schema = {
+        'type': 'object',
+        'description': 'Dataclass with final field',
+        'properties': {
+            'name': {'type': 'string'}
+        },
+        'required': ['name']
+    }
+
+    assert TestWithFinal.json_schema() == compose_schema(expected_schema)
+    assert TestWithFinal.from_dict({'name': 'foo'}) == TestWithFinal(name='foo')
+    assert TestWithFinal(name='foo').to_dict() == {'name': 'foo'}

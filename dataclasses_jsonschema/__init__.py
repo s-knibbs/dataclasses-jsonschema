@@ -1,3 +1,4 @@
+import sys
 import functools
 from _decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
@@ -8,6 +9,8 @@ from dataclasses import fields, is_dataclass, Field, MISSING, dataclass, asdict
 from uuid import UUID
 from enum import Enum
 import warnings
+
+from typing_extensions import Final
 
 try:
     # Supported in future python versions
@@ -50,7 +53,23 @@ def issubclass_safe(klass: Any, base: Type):
 
 
 def is_optional(field: Any) -> bool:
-    return str(field).startswith('typing.Union') and issubclass(field.__args__[1], type(None))
+    try:
+        return field.__origin__ == Union and issubclass(field.__args__[1], type(None))
+    except AttributeError:
+        return False
+
+
+def is_final(field: Any) -> bool:
+    try:
+        return field.__origin__ == Final
+    except AttributeError:
+        if sys.version_info[:2] == (3, 6):
+            return type(field).__qualname__ == "_Final"
+        return False
+
+
+def final_wrapped_type(final_type: Any) -> Any:
+    return final_type.__args__[0] if sys.version_info[:2] >= (3, 7) else final_type.__type__
 
 
 class SchemaType(Enum):
@@ -180,6 +199,8 @@ class JsonSchemaMixin:
                 def encoder(ft, v, __): return cls._field_encoders[ft].to_wire(v)
             elif is_optional(field_type):
                 def encoder(ft, val, o): return cls._encode_field(ft.__args__[0], val, o)
+            elif is_final(field_type):
+                def encoder(ft, val, o): return cls._encode_field(final_wrapped_type(ft), val, o)
             elif is_enum(field_type):
                 def encoder(_, v, __): return v.value
             elif field_type_name == 'Union':
@@ -269,6 +290,8 @@ class JsonSchemaMixin:
                 def decoder(_, ft, val): return ft.from_dict(val, validate=False)
             elif is_optional(field_type):
                 def decoder(f, ft, val): return cls._decode_field(f, ft.__args__[0], val)
+            elif is_final(field_type):
+                def decoder(f, ft, val): return cls._decode_field(f, final_wrapped_type(ft), val)
             elif field_type_name == 'Union':
                 # Attempt to decode the value using each decoder in turn
                 decoded = None
@@ -390,6 +413,8 @@ class JsonSchemaMixin:
             if is_optional(field_type):
                 field_schema = cls._get_field_schema(field_type.__args__[0], schema_type)[0]
                 required = False
+            elif is_final(field_type):
+                field_schema, required = cls._get_field_schema(final_wrapped_type(field_type), schema_type)
             elif is_enum(field_type):
                 member_types = set()
                 values = []
