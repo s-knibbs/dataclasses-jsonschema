@@ -1,7 +1,8 @@
+import datetime
 from _decimal import Decimal
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address
-from typing import List, NewType
+from typing import List, NewType, Optional
 from typing_extensions import Final, Literal
 from uuid import UUID
 
@@ -456,3 +457,39 @@ def test_literal_types():
     assert ImageMeta.json_schema() == compose_schema(expected_schema)
     assert ImageMeta(bits_per_pixel=16).to_dict() == {"bits_per_pixel": 16}
     assert ImageMeta.from_dict({"bits_per_pixel": 16}) == ImageMeta(bits_per_pixel=16)
+
+
+def test_from_object():
+
+    class AuthorModel:
+
+        def __init__(self, name, age, books):
+            self.name = name
+            self.age = age
+            self.books = books
+
+    class BookModel:
+
+        def __init__(self, name, first_print, publisher):
+            self.name = name
+            self.first_print = first_print
+            self.publisher = publisher
+
+    @dataclass
+    class Book(JsonSchemaMixin):
+        name: str
+        publisher: str
+        first_print: Optional[datetime.datetime] = None
+
+    @dataclass
+    class Author(JsonSchemaMixin):
+        name: str
+        age: Optional[int] = None
+        books: Optional[List[Book]] = None
+
+    sample_author = AuthorModel("Joe Bloggs", 32, [BookModel("Hello World!", datetime.datetime.utcnow(), "ACME Corp")])
+    expected_author = Author("Joe Bloggs", books=[Book("Hello World!", "ACME Corp")])
+    assert Author.from_object(sample_author, exclude=('age', ('books', ('first_print',)))) == expected_author
+
+    with pytest.raises(ValueError):
+        Author.from_object(sample_author, exclude=('age', ('books', ('publisher',))))

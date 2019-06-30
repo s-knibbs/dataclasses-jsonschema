@@ -81,6 +81,9 @@ _ValueDecoder = Callable[[str, Any, Any], Any]
 
 T = TypeVar("T", bound='JsonSchemaMixin')
 
+# TODO: Remove type ignore once https://github.com/python/mypy/issues/731 is fixed
+FieldExcludeList = Tuple[Union[str, Tuple[str, 'FieldExcludeList']], ...]  # type: ignore
+
 
 @functools.lru_cache()
 def _to_camel_case(value: str) -> str:
@@ -327,6 +330,44 @@ class JsonSchemaMixin:
                 values[field.name] = cls._decode_field(field.name, field.type, data.get(target_field))
 
         # Need to ignore the type error here, since mypy doesn't know that subclasses are dataclasses
+        instance = cls(**init_values)  # type: ignore
+        for field_name, value in non_init_values.items():
+            setattr(instance, field_name, value)
+        return instance
+
+    @classmethod
+    def from_object(cls: Type[T], obj: Any, exclude: FieldExcludeList = tuple()):
+        """Returns a dataclass instance from another object (typically an ORM model).
+        The `exclude` parameter is a tuple of field names or (field.name, nested_exclude)
+        to exclude from the conversion. For example `exclude=('artist_name', ('albums', ('tracks',))` will exclude
+        the `artist_name` and `tracks` from related albums
+        """
+        exclude_dict = dict([(f[0], f[1]) if isinstance(f, tuple) else (f, None) for f in exclude])
+        init_values: Dict[str, Any] = {}
+        non_init_values: Dict[str, Any] = {}
+        for field, _ in cls._get_fields():
+            sub_exclude: FieldExcludeList = tuple()
+            if field.name in exclude_dict:
+                if exclude_dict[field.name] is None:
+                    if field.default == MISSING and field.default == MISSING:
+                        raise ValueError("Excluded fields must have a default value")
+                    continue
+                else:
+                    sub_exclude = exclude_dict[field.name]  # type: ignore
+            values = init_values if field.init else non_init_values
+            ft = field.type
+            if is_optional(ft):
+                ft = ft.__args__[0]
+            field_type_name = cls._get_field_type_name(ft)
+            if cls._is_json_schema_subclass(field.type):
+                values[field.name] = ft.from_object(getattr(obj, field.name), exclude=sub_exclude)
+            elif field_type_name == "List" and cls._is_json_schema_subclass(ft.__args__[0]):
+                values[field.name] = [
+                    ft.__args__[0].from_object(v, exclude=sub_exclude) for v in getattr(obj, field.name)
+                ]
+            else:
+                values[field.name] = getattr(obj, field.name)
+
         instance = cls(**init_values)  # type: ignore
         for field_name, value in non_init_values.items():
             setattr(instance, field_name, value)
