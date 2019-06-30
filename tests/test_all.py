@@ -2,7 +2,7 @@ from _decimal import Decimal
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address
 from typing import List, NewType
-from typing_extensions import Final
+from typing_extensions import Final, Literal
 from uuid import UUID
 
 from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, \
@@ -436,3 +436,23 @@ def test_final_field():
     assert TestWithFinal.json_schema() == compose_schema(expected_schema)
     assert TestWithFinal.from_dict({'name': 'foo'}) == TestWithFinal(name='foo')
     assert TestWithFinal(name='foo').to_dict() == {'name': 'foo'}
+
+
+def test_literal_types():
+
+    @dataclass
+    class ImageMeta(JsonSchemaMixin):
+        """Image metadata"""
+        bits_per_pixel: Literal[8, 16, 24, "true-color", None]
+
+    expected_schema = {
+        'type': 'object',
+        'description': 'Image metadata',
+        'properties': {
+            'bits_per_pixel': {'enum': [8, 16, 24, 'true-color', None]}
+        },
+        'required': ['bits_per_pixel']
+    }
+    assert ImageMeta.json_schema() == compose_schema(expected_schema)
+    assert ImageMeta(bits_per_pixel=16).to_dict() == {"bits_per_pixel": 16}
+    assert ImageMeta.from_dict({"bits_per_pixel": 16}) == ImageMeta(bits_per_pixel=16)

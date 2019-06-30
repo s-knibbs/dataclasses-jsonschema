@@ -10,19 +10,14 @@ from uuid import UUID
 from enum import Enum
 import warnings
 
-from typing_extensions import Final
+from typing_extensions import Final, Literal
 
-try:
-    # Supported in future python versions
-    from typing import TypedDict  # type: ignore
-except ImportError:
-    from mypy_extensions import TypedDict
 
 from dataclasses_jsonschema.field_types import (  # noqa: F401
     FieldEncoder, DateTimeFieldEncoder, UuidField, DecimalField,
     IPv4AddressField, IPv6AddressField, DateTimeField
 )
-from dataclasses_jsonschema.type_defs import JsonDict
+from dataclasses_jsonschema.type_defs import JsonDict, SchemaType, JsonSchemaMeta  # noqa: F401
 
 try:
     import valico as validator
@@ -68,24 +63,17 @@ def is_final(field: Any) -> bool:
         return False
 
 
+def is_literal(field: Any) -> bool:
+    try:
+        return field.__origin__ == Literal
+    except AttributeError:
+        if sys.version_info[:2] == (3, 6):
+            return type(field).__qualname__ == "_Literal"
+        return False
+
+
 def final_wrapped_type(final_type: Any) -> Any:
     return final_type.__args__[0] if sys.version_info[:2] >= (3, 7) else final_type.__type__
-
-
-class SchemaType(Enum):
-    DRAFT_06 = "Draft6"
-    DRAFT_04 = "Draft4"
-    SWAGGER_V2 = "2.0"
-    SWAGGER_V3 = "3.0"
-    # Alias of SWAGGER_V2
-    V2 = "2.0"
-    # Alias of SWAGGER_V3
-    V3 = "3.0"
-    OPENAPI_3 = "3.0"
-
-
-# Retained for backwards compatibility
-SwaggerSpecVersion = SchemaType
 
 
 _ValueEncoder = Callable[[Any, Any, bool], Any]
@@ -101,20 +89,6 @@ def _to_camel_case(value: str) -> str:
         return "".join([parts[0]] + [part[0].upper() + part[1:] for part in parts[1:]])
     else:
         return value
-
-
-class JsonSchemaMeta(TypedDict):
-    """JSON schema field definitions. Example usage:
-
-    >>> foo = field(metadata=JsonSchemaMeta(description="A foo that foos"))
-    """
-    description: str
-    title: str
-    examples: List
-    read_only: bool
-    write_only: bool
-    # Additional extension properties that will be output prefixed with 'x-' when generating OpenAPI / Swagger schemas
-    extensions: Dict[str, Any]
 
 
 @dataclass
@@ -194,6 +168,8 @@ class JsonSchemaMixin:
             if cls._encode_cache is None:
                 cls._encode_cache = {}
 
+            # TODO: Use field_type.__origin__ instead of the type name.
+            # This has different behaviour between 3.6 & 3.7 however
             field_type_name = cls._get_field_type_name(field_type)
             if field_type in cls._field_encoders:
                 def encoder(ft, v, __): return cls._field_encoders[ft].to_wire(v)
@@ -280,10 +256,11 @@ class JsonSchemaMixin:
         try:
             decoder = cls._decode_cache[field_type]  # type: ignore
         except (KeyError, TypeError):
-            if type(value) in JSON_ENCODABLE_TYPES and field_type in JSON_ENCODABLE_TYPES:
-                return value
             if cls._decode_cache is None:
                 cls._decode_cache = {}
+            # Note: Only literal types composed of primitive values are currently supported
+            if type(value) in JSON_ENCODABLE_TYPES and (field_type in JSON_ENCODABLE_TYPES or is_literal(field_type)):
+                return value
             # Replace any nested dictionaries with their targets
             field_type_name = cls._get_field_type_name(field_type)
             if cls._is_json_schema_subclass(field_type):
@@ -415,6 +392,10 @@ class JsonSchemaMixin:
                 required = False
             elif is_final(field_type):
                 field_schema, required = cls._get_field_schema(final_wrapped_type(field_type), schema_type)
+            elif is_literal(field_type):
+                field_schema = {
+                    'enum': list(field_type.__args__ if sys.version_info[:2] >= (3, 7) else field_type.__values__)
+                }
             elif is_enum(field_type):
                 member_types = set()
                 values = []
