@@ -107,21 +107,3 @@ class ProductList(JsonSchemaMixin):
 class Zoo(JsonSchemaMixin):
     """A zoo"""
     animal_types: Optional[Dict[str, str]] = field(default_factory=dict)
-
-
-def test_final_field():
-
-    @dataclass
-    class TestWithFinal(JsonSchemaMixin):
-        name: Final[str]
-
-    expected_schema = {
-        'type': 'object',
-        'description': 'TestWithFinal(name: str)',
-        'properties': {
-            'name': {'type': 'string'}
-        },
-        'required': ['name']
-    }
-
-    assert TestWithFinal.json_schema() == compose_schema(expected_schema)

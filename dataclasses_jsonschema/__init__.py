@@ -20,9 +20,17 @@ from dataclasses_jsonschema.field_types import (  # noqa: F401
 from dataclasses_jsonschema.type_defs import JsonDict, SchemaType, JsonSchemaMeta  # noqa: F401
 
 try:
-    import valico as validator
+    import fastjsonschema
+
+    def validate_func(data, schema):
+        return fastjsonschema.validate(schema, data)
+    JsonSchemaValidationError = fastjsonschema.JsonSchemaException
+    fast_validation = True
 except ImportError:
-    import jsonschema as validator
+    import jsonschema
+    validate_func = jsonschema.validate
+    JsonSchemaValidationError = jsonschema.ValidationError
+    fast_validation = False
 
 JSON_ENCODABLE_TYPES = {
     str: {'type': 'string'},
@@ -84,6 +92,8 @@ T = TypeVar("T", bound='JsonSchemaMixin')
 # TODO: Remove type ignore once https://github.com/python/mypy/issues/731 is fixed
 FieldExcludeList = Tuple[Union[str, Tuple[str, 'FieldExcludeList']], ...]  # type: ignore
 
+DEFAULT_SCHEMA_TYPE = SchemaType.DRAFT_06
+
 
 @functools.lru_cache()
 def _to_camel_case(value: str) -> str:
@@ -136,6 +146,7 @@ class JsonSchemaMixin:
 
     # Cache of the generated schema
     _schema: Optional[Dict[SchemaType, JsonDict]] = None
+    _compiled_schema: Optional[Dict[SchemaType, Callable]] = None
     _definitions: Optional[Dict[SchemaType, JsonDict]] = None
     # Cache of field encode / decode functions
     _encode_cache: Optional[Dict[Any, _ValueEncoder]] = None
@@ -245,10 +256,7 @@ class JsonSchemaMixin:
                 continue
             data[target_field] = value
         if validate:
-            try:
-                validator.validate(data, self.json_schema())
-            except validator.ValidationError as e:
-                raise ValidationError(str(e)) from e
+            self._validate(data)
         return data
 
     @classmethod
@@ -311,6 +319,23 @@ class JsonSchemaMixin:
         return decoder(field, field_type, value)
 
     @classmethod
+    def _validate(cls, data: JsonDict):
+        try:
+            if fast_validation:
+                if cls._compiled_schema is None:
+                    cls._compiled_schema = {}
+                # TODO: Support validating with other schema types
+                schema_validator = cls._compiled_schema.get(DEFAULT_SCHEMA_TYPE)
+                if schema_validator is None:
+                    schema_validator = fastjsonschema.compile(cls.json_schema())
+                    cls._compiled_schema[DEFAULT_SCHEMA_TYPE] = schema_validator
+                schema_validator(data)
+            else:
+                validate_func(data, cls.json_schema())
+        except JsonSchemaValidationError as e:
+            raise ValidationError(str(e)) from e
+
+    @classmethod
     def from_dict(cls: Type[T], data: JsonDict, validate=True) -> T:
         """Returns a dataclass instance with all nested classes converted from the dict given"""
         if cls is JsonSchemaMixin:
@@ -319,10 +344,7 @@ class JsonSchemaMixin:
         init_values: Dict[str, Any] = {}
         non_init_values: Dict[str, Any] = {}
         if validate:
-            try:
-                validator.validate(data, cls.json_schema())
-            except validator.ValidationError as e:
-                raise ValidationError(str(e)) from e
+            cls._validate(data)
 
         for field, target_field in cls._get_fields():
             values = init_values if field.init else non_init_values
@@ -509,7 +531,7 @@ class JsonSchemaMixin:
                 definitions.update(field_type.json_schema(embeddable=True, schema_type=schema_type))
 
     @classmethod
-    def all_json_schemas(cls, schema_type: SchemaType = SchemaType.DRAFT_06) -> JsonDict:
+    def all_json_schemas(cls: Type[T], schema_type: SchemaType = DEFAULT_SCHEMA_TYPE) -> JsonDict:
         """Returns JSON schemas for all subclasses"""
         definitions = {}
         for subclass in cls.__subclasses__():
@@ -520,7 +542,7 @@ class JsonSchemaMixin:
         return definitions
 
     @classmethod
-    def json_schema(cls, embeddable: bool = False, schema_type: SchemaType = SchemaType.DRAFT_06, **kwargs) -> JsonDict:
+    def json_schema(cls, embeddable: bool = False, schema_type: SchemaType = DEFAULT_SCHEMA_TYPE, **kwargs) -> JsonDict:
         """Returns the JSON schema for the dataclass, along with the schema of any nested dataclasses
         within the 'definitions' field.
 
