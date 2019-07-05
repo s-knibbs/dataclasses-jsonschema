@@ -12,12 +12,6 @@ import pytest
 
 from dataclasses_jsonschema import SchemaType, ValidationError, DecimalField, JsonSchemaMeta
 
-try:
-    import valico as _
-
-    have_valico = True
-except ImportError:
-    have_valico = False
 
 FOO_SCHEMA = {
     'description': 'A foo that foos',
@@ -173,8 +167,6 @@ def test_field_with_default_factory():
     )
 
 
-# TODO: Investigate this / raise an issue on https://github.com/rustless/valico
-@pytest.mark.skipif(have_valico, reason="Skipped due to valico bug")
 def test_field_with_default_dataclass():
     assert Baz(a=Point(0.0, 0.0)) == Baz.from_dict({})
 

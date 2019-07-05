@@ -20,9 +20,16 @@ from dataclasses_jsonschema.field_types import (  # noqa: F401
 from dataclasses_jsonschema.type_defs import JsonDict, SchemaType, JsonSchemaMeta  # noqa: F401
 
 try:
-    import valico as validator
+    import fastjsonschema
+
+
+    def validate_func(data, schema):
+        return fastjsonschema.validate(schema, data)
+    JsonSchemaValidationError = fastjsonschema.JsonSchemaException
 except ImportError:
-    import jsonschema as validator
+    import jsonschema
+    validate_func = jsonschema.validate
+    JsonSchemaValidationError = jsonschema.ValidationError
 
 JSON_ENCODABLE_TYPES = {
     str: {'type': 'string'},
@@ -246,8 +253,8 @@ class JsonSchemaMixin:
             data[target_field] = value
         if validate:
             try:
-                validator.validate(data, self.json_schema())
-            except validator.ValidationError as e:
+                validate_func(data, self.json_schema())
+            except JsonSchemaValidationError as e:
                 raise ValidationError(str(e)) from e
         return data
 
@@ -320,8 +327,8 @@ class JsonSchemaMixin:
         non_init_values: Dict[str, Any] = {}
         if validate:
             try:
-                validator.validate(data, cls.json_schema())
-            except validator.ValidationError as e:
+                validate_func(data, cls.json_schema())
+            except JsonSchemaValidationError as e:
                 raise ValidationError(str(e)) from e
 
         for field, target_field in cls._get_fields():
@@ -509,7 +516,7 @@ class JsonSchemaMixin:
                 definitions.update(field_type.json_schema(embeddable=True, schema_type=schema_type))
 
     @classmethod
-    def all_json_schemas(cls, schema_type: SchemaType = SchemaType.DRAFT_06) -> JsonDict:
+    def all_json_schemas(cls: Type[T], schema_type: SchemaType = SchemaType.DRAFT_06) -> JsonDict:
         """Returns JSON schemas for all subclasses"""
         definitions = {}
         for subclass in cls.__subclasses__():
