@@ -307,7 +307,7 @@ def test_read_only_field():
     class Employee(JsonSchemaMixin):
         name: str
         department: str
-        id: int = field(metadata=dict(read_only=True), default=-1)
+        id: Optional[int] = field(metadata=JsonSchemaMeta(read_only=True), default=None)
 
     schema = Employee.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True)
     assert schema['Employee']['properties']['id']['readOnly']
@@ -485,3 +485,10 @@ def test_from_object():
 
     with pytest.raises(ValueError):
         Author.from_object(sample_author, exclude=('age', ('books', ('publisher',))))
+
+
+def test_serialise_deserialise_opaque_data():
+    data = OpaqueData(a=["foo", 123], b={"foo": "bar", "baz": 123})
+    dict_data = {"a": ["foo", 123], "b": {"foo": "bar", "baz": 123}}
+    assert data.to_dict() == dict_data
+    assert data == OpaqueData.from_dict(dict_data)
