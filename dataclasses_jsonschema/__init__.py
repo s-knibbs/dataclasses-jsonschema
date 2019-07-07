@@ -312,6 +312,8 @@ class JsonSchemaMixin:
                 def decoder(_, ft, val): return ft(val)
             elif field_type in cls._field_encoders:
                 def decoder(_, ft, val): return cls._field_encoders[ft].to_python(val)
+            elif field_type == Any:
+                def decoder(_, __, val): return val
             if decoder is None:
                 warnings.warn(f"Unable to decode value for '{field}: {field_type_name}'")
                 return value
@@ -403,15 +405,15 @@ class JsonSchemaMixin:
     def _get_field_meta(cls, field: Field, schema_type: SchemaType) -> Tuple[FieldMeta, bool]:
         required = True
         field_meta = FieldMeta(schema_type=schema_type)
-        default_value = None
-        if field.default is not MISSING and field.default is not None:
+        default_value = MISSING
+        if field.default is not MISSING:
             # In case of default value given
             default_value = field.default
         elif field.default_factory is not MISSING and field.default_factory is not None:  # type: ignore
             # In case of a default factory given, we call it
             default_value = field.default_factory()  # type: ignore
 
-        if default_value is not None:
+        if default_value is not MISSING:
             field_meta.default = cls._encode_field(field.type, default_value, omit_none=False)
             required = False
         if field.metadata is not None:
@@ -427,7 +429,7 @@ class JsonSchemaMixin:
                 field_meta.title = field.metadata["title"]
             if schema_type == SchemaType.OPENAPI_3:
                 field_meta.read_only = field.metadata.get("read_only")
-                if field_meta.read_only and default_value is None:
+                if field_meta.read_only and default_value is MISSING:
                     warnings.warn(f"Read-only fields should have a default value")
                 field_meta.write_only = field.metadata.get("write_only")
         return field_meta, required
