@@ -24,10 +24,11 @@ setup(
     url='https://github.com/s-knibbs/dataclasses-jsonschema',
     install_requires=requires,
     extras_require={
-        'fast-validation': ["fastjsonschema>=2.13"]
+        'fast-validation': ["fastjsonschema>=2.13"],
+        'apispec': ["apispec"]
     },
     setup_requires=['pytest-runner', 'setuptools_scm'],
-    tests_require=['pytest', 'flake8', 'mypy'],
+    tests_require=['pytest', 'flake8', 'mypy', 'apispec', 'apispec_webframeworks', 'flask', 'pytest-ordering'],
     license='MIT',
     use_scm_version=True,
     classifiers=[
