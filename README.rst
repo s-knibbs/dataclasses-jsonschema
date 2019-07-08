@@ -11,11 +11,15 @@ Dataclasses JSON Schema
     :target: https://lgtm.com/projects/g/s-knibbs/dataclasses-jsonschema/context:python
     :alt:    Language grade: Python
 
-A lightweight library to generate JSON Schema from python 3.7 dataclasses. Python 3.6 is supported through the `dataclasses backport <https://github.com/ericvsmith/dataclasses>`_. Also supports the following features:
+A library to generate JSON Schema from python 3.7 dataclasses. Python 3.6 is supported through the `dataclasses backport <https://github.com/ericvsmith/dataclasses>`_. Aims to be a more lightweight alternative to similar projects such as `marshmallow <https://github.com/marshmallow-code/marshmallow>`_ & `pydantic <https://github.com/samuelcolvin/pydantic>`_.
 
-* Generate schemas that can be embedded into Swagger / OpenAPI 2.0 and 3.0 specs
+Feature Overview
+----------------
+
+* Support for draft-04, draft-06, Swagger 2.0 & OpenAPI 3 schema types
 * Serialisation and deserialisation
 * Data validation against the generated schema
+* `APISpec <https://github.com/marshmallow-code/apispec>`_ support. Example below_:
 
 Installation
 ------------
@@ -24,7 +28,7 @@ Installation
 
     ~$ pip install dataclasses-jsonschema
 
-For improved validation performance using `PyValico <https://github.com/s-knibbs/pyvalico>`_, install with:
+For improved validation performance using `fastjsonschema <https://github.com/horejsek/python-fastjsonschema>`_, install with:
 
 .. code:: bash
 
@@ -134,24 +138,74 @@ Custom validation rules can be added using `NewType <https://docs.python.org/3/l
 
 For more examples `see the tests <https://github.com/s-knibbs/dataclasses-jsonschema/blob/master/tests/conftest.py>`_
 
+.. _below:
+
+APISpec Plugin
+--------------
+**New in v2.5.0**
+
+OpenAPI & Swagger specs can be generated using the apispec plugin:
+
+.. code:: python
+
+    from typing import Optional, List
+    from dataclasses import dataclass
+
+    from apispec import APISpec
+    from apispec_webframeworks.flask import FlaskPlugin
+    from flask import Flask, jsonify
+    import pytest
+
+    from dataclasses_jsonschema.apispec import DataclassesPlugin
+    from dataclasses_jsonschema import JsonSchemaMixin
+
+
+    # Create an APISpec
+    spec = APISpec(
+        title="Swagger Petstore",
+        version="1.0.0",
+        openapi_version="3.0.2",
+        plugins=[FlaskPlugin(), DataclassesPlugin()],
+    )
+    
+    
+    @dataclass
+    class Category(JsonSchemaMixin):
+        """Pet category"""
+        name: str
+        id: Optional[int]
+
+    @dataclass
+    class Pet(JsonSchemaMixin):
+        """A pet"""
+        categories: List[Category]
+        name: str
+
+
+    app = Flask(__name__)
+
+
+    @app.route("/random")
+    def random_pet():
+        """A cute furry animal endpoint.
+        ---
+        get:
+          description: Get a random pet
+          responses:
+            200:
+              content:
+                application/json:
+                  schema: Pet
+        """
+        pet = get_random_pet()
+        return jsonify(pet.to_dict())
+ 
+    # Dependant schemas (e.g. 'Category') are added automatically
+    spec.components.schema("Pet", schema=Pet)
+    with app.test_request_context():
+        spec.path(view=random_pet)
+
 TODO
 ----
 
 * Add benchmarks against alternatives such as `pydantic <https://github.com/samuelcolvin/pydantic>`_ and `marshmallow <https://github.com/marshmallow-code/marshmallow>`_
-
-
-KNOWN ISSUES
-------------
-
-The following will currently fail when installed alongside ``pyvalico==0.0.2``
-
-.. code:: python
-
-    @dataclass
-    class Baz(JsonSchemaMixin):
-        """Type with nested default value"""
-        a: Point = field(default=Point(0.0, 0.0))
-
-    Baz.from_dict({})
-
-The workaround is to pin pyvalico to v0.0.1
