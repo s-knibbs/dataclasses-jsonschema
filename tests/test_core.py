@@ -492,3 +492,35 @@ def test_serialise_deserialise_opaque_data():
     dict_data = {"a": ["foo", 123], "b": {"foo": "bar", "baz": 123}}
     assert data.to_dict() == dict_data
     assert data == OpaqueData.from_dict(dict_data)
+
+
+def test_inherited_schema():
+    @dataclass
+    class Pet(JsonSchemaMixin):
+        """A generic pet"""
+        name: str
+
+    @dataclass
+    class Cat(Pet):
+        """A cat"""
+        hunting_skill: str
+
+    expected_schema = compose_schema({
+        "description": "A cat",
+        "allOf": [
+            {"$ref": "#/definitions/Pet"},
+            {
+                "type": "object",
+                "properties": {"hunting_skill": {"type": "string"}},
+                "required": ["hunting_skill"]
+            },
+        ]
+    }, {
+        "Pet": {
+            "description": "A generic pet",
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"]
+        }
+    })
+    assert Cat.json_schema() == expected_schema
