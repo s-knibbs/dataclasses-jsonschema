@@ -57,7 +57,7 @@ def issubclass_safe(klass: Any, base: Type):
 
 def is_optional(field: Any) -> bool:
     try:
-        return field.__origin__ == Union and issubclass(field.__args__[1], type(None))
+        return field.__origin__ == Union and type(None) in field.__args__
     except AttributeError:
         return False
 
@@ -80,8 +80,13 @@ def is_literal(field: Any) -> bool:
         return False
 
 
-def final_wrapped_type(final_type: Any) -> Any:
+def unwrap_final(final_type: Any) -> Any:
     return final_type.__args__[0] if sys.version_info[:2] >= (3, 7) else final_type.__type__
+
+
+def unwrap_optional(optional_type: Any) -> Any:
+    idx = optional_type.__args__.index(type(None))
+    return Union[optional_type.__args__[:idx] + optional_type.__args__[idx+1:]]
 
 
 def schema_reference(schema_type: SchemaType, schema_name: str) -> Dict[str, str]:
@@ -193,9 +198,9 @@ class JsonSchemaMixin:
             if field_type in cls._field_encoders:
                 def encoder(ft, v, __): return cls._field_encoders[ft].to_wire(v)
             elif is_optional(field_type):
-                def encoder(ft, val, o): return cls._encode_field(ft.__args__[0], val, o)
+                def encoder(ft, val, o): return cls._encode_field(unwrap_optional(ft), val, o)
             elif is_final(field_type):
-                def encoder(ft, val, o): return cls._encode_field(final_wrapped_type(ft), val, o)
+                def encoder(ft, val, o): return cls._encode_field(unwrap_final(ft), val, o)
             elif is_enum(field_type):
                 def encoder(_, v, __): return v.value
             elif field_type_name == 'Union':
@@ -296,9 +301,9 @@ class JsonSchemaMixin:
             if cls._is_json_schema_subclass(field_type):
                 def decoder(_, ft, val): return ft.from_dict(val, validate=False)
             elif is_optional(field_type):
-                def decoder(f, ft, val): return cls._decode_field(f, ft.__args__[0], val)
+                def decoder(f, ft, val): return cls._decode_field(f, unwrap_optional(ft), val)
             elif is_final(field_type):
-                def decoder(f, ft, val): return cls._decode_field(f, final_wrapped_type(ft), val)
+                def decoder(f, ft, val): return cls._decode_field(f, unwrap_final(ft), val)
             elif field_type_name == 'Union':
                 # Attempt to decode the value using each decoder in turn
                 decoded = None
@@ -400,9 +405,9 @@ class JsonSchemaMixin:
             values = init_values if field.init else non_init_values
             ft = field.type
             if is_optional(ft):
-                ft = ft.__args__[0]
+                ft = unwrap_optional(ft)
             field_type_name = cls._get_field_type_name(ft)
-            if cls._is_json_schema_subclass(field.type):
+            if cls._is_json_schema_subclass(ft):
                 values[field.name] = ft.from_object(getattr(obj, field.name), exclude=sub_exclude)
             elif field_type_name == "List" and cls._is_json_schema_subclass(ft.__args__[0]):
                 values[field.name] = [
@@ -471,10 +476,10 @@ class JsonSchemaMixin:
         else:
             # If is optional[...]
             if is_optional(field_type):
-                field_schema = cls._get_field_schema(field_type.__args__[0], schema_type)[0]
+                field_schema = cls._get_field_schema(unwrap_optional(field_type), schema_type)[0]
                 required = False
             elif is_final(field_type):
-                field_schema, required = cls._get_field_schema(final_wrapped_type(field_type), schema_type)
+                field_schema, required = cls._get_field_schema(unwrap_final(field_type), schema_type)
             elif is_literal(field_type):
                 field_schema = {
                     'enum': list(field_type.__args__ if sys.version_info[:2] >= (3, 7) else field_type.__values__)
