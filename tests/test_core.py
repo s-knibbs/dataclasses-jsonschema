@@ -2,7 +2,7 @@ import datetime
 from _decimal import Decimal
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address
-from typing import List, NewType, Optional
+from typing import List, NewType, Optional, Union
 from typing_extensions import Final, Literal
 from uuid import UUID
 
@@ -524,3 +524,19 @@ def test_inherited_schema():
         }
     })
     assert Cat.json_schema() == expected_schema
+
+
+def test_optional_union():
+    @dataclass
+    class Baz(JsonSchemaMixin):
+        """Class with optional union"""
+        a: Optional[Union[int, str]]
+
+    expected_schema = compose_schema({
+        "description": "Class with optional union",
+        "type": "object",
+        "properties": {
+            "a": {"oneOf": [{"type": "integer"}, {"type": "string"}]}
+        }
+    })
+    assert Baz.json_schema() == expected_schema
