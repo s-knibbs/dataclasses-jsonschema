@@ -84,6 +84,11 @@ def final_wrapped_type(final_type: Any) -> Any:
     return final_type.__args__[0] if sys.version_info[:2] >= (3, 7) else final_type.__type__
 
 
+def schema_reference(schema_type: SchemaType, schema_name: str) -> Dict[str, str]:
+    ref_path = '#/components/schemas' if schema_type == SchemaType.SWAGGER_V3 else '#/definitions'
+    return {"$ref": '{}/{}'.format(ref_path, schema_name)}
+
+
 _ValueEncoder = Callable[[Any, Any, bool], Any]
 _ValueDecoder = Callable[[str, Any, Any], Any]
 
@@ -230,18 +235,32 @@ class JsonSchemaMixin:
         return encoder(field_type, value, omit_none)
 
     @classmethod
-    def _get_fields(cls) -> List[Tuple[Field, str]]:
-        if cls._mapped_fields is None:
+    def _get_fields(cls, base_fields=True) -> List[Tuple[Field, str]]:
+
+        def _get_fields_uncached():
+            dataclass_bases = [
+                klass for klass in cls.__bases__ if is_dataclass(klass) and issubclass(klass, JsonSchemaMixin)
+            ]
+            base_field_names = set()
+            for base in dataclass_bases:
+                base_field_names |= {f.name for f in fields(base)}
+
             mapped_fields = []
             type_hints = get_type_hints(cls)
             for f in fields(cls):
                 # Skip internal fields
-                if f.name.startswith("_"):
+                if f.name.startswith("_") or (not base_fields and f.name in base_field_names):
                     continue
                 # Note fields() doesn't resolve forward refs
                 f.type = type_hints[f.name]
                 mapped_fields.append((f, cls.field_mapping().get(f.name, f.name)))
-            cls._mapped_fields = mapped_fields  # type: ignore
+            return mapped_fields
+
+        if not base_fields:
+            return _get_fields_uncached()
+
+        if cls._mapped_fields is None:
+            cls._mapped_fields = _get_fields_uncached()
         return cls._mapped_fields  # type: ignore
 
     def to_dict(self, omit_none: bool = True, validate: bool = False) -> JsonDict:
@@ -447,9 +466,8 @@ class JsonSchemaMixin:
             field_meta = FieldMeta(schema_type=schema_type)
 
         field_type_name = cls._get_field_type_name(field_type)
-        ref_path = '#/components/schemas' if schema_type == SchemaType.SWAGGER_V3 else '#/definitions'
         if cls._is_json_schema_subclass(field_type):
-            field_schema = {'$ref': '{}/{}'.format(ref_path, field_type_name)}
+            field_schema = schema_reference(schema_type, field_type_name)
         else:
             # If is optional[...]
             if is_optional(field_type):
@@ -581,7 +599,7 @@ class JsonSchemaMixin:
         else:
             properties = {}
             required = []
-            for field, target_field in cls._get_fields():
+            for field, target_field in cls._get_fields(base_fields=False):
                 properties[target_field], is_required = cls._get_field_schema(field, schema_type)
                 cls._get_field_definitions(field.type, definitions, schema_type)
                 if is_required:
@@ -595,6 +613,17 @@ class JsonSchemaMixin:
             # Needed for Draft 04 backwards compatibility
             if len(required) == 0:
                 del schema["required"]
+
+            dataclass_bases = [
+                klass for klass in cls.__bases__ if is_dataclass(klass) and issubclass(klass, JsonSchemaMixin)
+            ]
+            if len(dataclass_bases) > 0:
+                schema = {
+                    "allOf": [schema_reference(schema_type, base.__name__) for base in dataclass_bases] + [schema]
+                }
+                for base in dataclass_bases:
+                    definitions.update(base.json_schema(embeddable=True, schema_type=schema_type))
+
             if cls.__doc__:
                 schema['description'] = cls.__doc__
 
