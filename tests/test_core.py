@@ -6,12 +6,12 @@ from typing import List, NewType, Optional, Union
 from typing_extensions import Final, Literal
 from uuid import UUID
 
+from dataclasses_jsonschema.type_defs import Nullable, NULL
 from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, \
     JsonSchemaMixin, Zoo, Baz
 import pytest
 
 from dataclasses_jsonschema import SchemaType, ValidationError, DecimalField, JsonSchemaMeta
-
 
 FOO_SCHEMA = {
     'description': 'A foo that foos',
@@ -540,3 +540,39 @@ def test_optional_union():
         }
     })
     assert Baz.json_schema() == expected_schema
+
+
+def test_nullable_field():
+    @dataclass
+    class Employee(JsonSchemaMixin):
+        """An employee"""
+        name: str
+        manager: Nullable[Optional[str]] = None
+
+    expected_openapi_3_schema = {
+        "type": "object",
+        "description": "An employee",
+        "properties": {
+            "name": {"type": "string"},
+            "manager": {"type": "string", "nullable": True}
+        },
+        "required": ["name"]
+    }
+    expected_json_schema = compose_schema({
+        "type": "object",
+        "description": "An employee",
+        "properties": {
+            "name": {"type": "string"},
+            "manager": {"oneOf": [{"type": "string"}, {"type": "null"}]}
+        },
+        "required": ["name"]
+    })
+    assert Employee.json_schema() == expected_json_schema
+    assert (
+        Employee.json_schema(embeddable=True, schema_type=SchemaType.OPENAPI_3)["Employee"] == expected_openapi_3_schema
+    )
+
+    expected_obj = Employee(name="Joe Bloggs", manager=NULL)
+    expected_dict = {"name": "Joe Bloggs", "manager": None}
+    assert Employee.from_dict(expected_dict) == expected_obj
+    assert expected_dict == expected_obj.to_dict()

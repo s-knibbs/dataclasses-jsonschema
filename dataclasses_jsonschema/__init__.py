@@ -17,7 +17,7 @@ from dataclasses_jsonschema.field_types import (  # noqa: F401
     FieldEncoder, DateTimeFieldEncoder, UuidField, DecimalField,
     IPv4AddressField, IPv6AddressField, DateTimeField
 )
-from dataclasses_jsonschema.type_defs import JsonDict, SchemaType, JsonSchemaMeta  # noqa: F401
+from dataclasses_jsonschema.type_defs import JsonDict, SchemaType, JsonSchemaMeta, _NULL_TYPE, NULL  # noqa: F401
 
 try:
     import fastjsonschema
@@ -80,6 +80,13 @@ def is_literal(field: Any) -> bool:
         return False
 
 
+def is_nullable(field: Any) -> bool:
+    try:
+        return field.__origin__ == Union and _NULL_TYPE in field.__args__
+    except AttributeError:
+        return False
+
+
 def unwrap_final(final_type: Any) -> Any:
     return final_type.__args__[0] if sys.version_info[:2] >= (3, 7) else final_type.__type__
 
@@ -87,6 +94,11 @@ def unwrap_final(final_type: Any) -> Any:
 def unwrap_optional(optional_type: Any) -> Any:
     idx = optional_type.__args__.index(type(None))
     return Union[optional_type.__args__[:idx] + optional_type.__args__[idx+1:]]
+
+
+def unwrap_nullable(nullable_type: Any) -> Any:
+    idx = nullable_type.__args__.index(_NULL_TYPE)
+    return Union[nullable_type.__args__[:idx] + nullable_type.__args__[idx+1:]]
 
 
 def schema_reference(schema_type: SchemaType, schema_name: str) -> Dict[str, str]:
@@ -199,6 +211,8 @@ class JsonSchemaMixin:
                 def encoder(ft, v, __): return cls._field_encoders[ft].to_wire(v)
             elif is_optional(field_type):
                 def encoder(ft, val, o): return cls._encode_field(unwrap_optional(ft), val, o)
+            elif is_nullable(field_type):
+                def encoder(ft, val, o): return cls._encode_field(unwrap_nullable(ft), val, o)
             elif is_final(field_type):
                 def encoder(ft, val, o): return cls._encode_field(unwrap_final(ft), val, o)
             elif is_enum(field_type):
@@ -278,6 +292,8 @@ class JsonSchemaMixin:
             value = self._encode_field(field.type, getattr(self, field.name), omit_none)
             if omit_none and value is None:
                 continue
+            if value is NULL:
+                value = None
             data[target_field] = value
         if validate:
             self._validate(data)
@@ -286,7 +302,7 @@ class JsonSchemaMixin:
     @classmethod
     def _decode_field(cls, field: str, field_type: Any, value: Any) -> Any:
         if value is None:
-            return None
+            return NULL if is_nullable(field_type) else None
         decoder = None
         try:
             decoder = cls._decode_cache[field_type]  # type: ignore
@@ -300,6 +316,8 @@ class JsonSchemaMixin:
             field_type_name = cls._get_field_type_name(field_type)
             if cls._is_json_schema_subclass(field_type):
                 def decoder(_, ft, val): return ft.from_dict(val, validate=False)
+            elif is_nullable(field_type):
+                def decoder(f, ft, val): return cls._decode_field(f, unwrap_nullable(ft), val)
             elif is_optional(field_type):
                 def decoder(f, ft, val): return cls._decode_field(f, unwrap_optional(ft), val)
             elif is_final(field_type):
@@ -478,6 +496,13 @@ class JsonSchemaMixin:
             if is_optional(field_type):
                 field_schema = cls._get_field_schema(unwrap_optional(field_type), schema_type)[0]
                 required = False
+            elif is_nullable(field_type):
+                field_schema, required = cls._get_field_schema(unwrap_nullable(field_type), schema_type)
+                print(field_schema)
+                if schema_type == SchemaType.OPENAPI_3:
+                    field_schema["nullable"] = True
+                elif schema_type != SchemaType.SWAGGER_V2:
+                    field_schema = {"oneOf": [field_schema, {"type": "null"}]}
             elif is_final(field_type):
                 field_schema, required = cls._get_field_schema(unwrap_final(field_type), schema_type)
             elif is_literal(field_type):
