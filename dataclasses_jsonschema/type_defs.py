@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union, Dict, Any, List, Type
+from typing import Union, Dict, Any, List, TypeVar
 
 try:
     # Supported in future python versions
@@ -51,14 +51,5 @@ class _NULL_TYPE:
 
 NULL = _NULL_TYPE()
 
-
-class _Nullable:
-    """Nullable type annotation. Used to declare fields which can have a null value.
-    This is distinct from `None`, which refers to the absence of a value.
-    """
-
-    def __getitem__(self, item: Type):
-        return Union[item, _NULL_TYPE]
-
-
-Nullable = _Nullable()
+T = TypeVar("T")
+Nullable = Union[T, _NULL_TYPE]

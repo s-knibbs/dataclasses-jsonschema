@@ -82,6 +82,9 @@ def is_literal(field: Any) -> bool:
 
 def is_nullable(field: Any) -> bool:
     try:
+        if sys.version_info[:2] == (3, 6):
+            # Hack to get python 3.6 working
+            return "_NULL_TYPE" in repr(field)
         return field.__origin__ == Union and _NULL_TYPE in field.__args__
     except AttributeError:
         return False
@@ -97,6 +100,8 @@ def unwrap_optional(optional_type: Any) -> Any:
 
 
 def unwrap_nullable(nullable_type: Any) -> Any:
+    if sys.version_info[:2] == (3, 6):
+        return Union[nullable_type.__args__]
     idx = nullable_type.__args__.index(_NULL_TYPE)
     return Union[nullable_type.__args__[:idx] + nullable_type.__args__[idx+1:]]
 
@@ -196,7 +201,7 @@ class JsonSchemaMixin:
 
     @classmethod
     def _encode_field(cls, field_type: Any, value: Any, omit_none: bool) -> Any:
-        if value is None:
+        if value is None or value is NULL:
             return value
         try:
             encoder = cls._encode_cache[field_type]  # type: ignore
@@ -498,7 +503,6 @@ class JsonSchemaMixin:
                 required = False
             elif is_nullable(field_type):
                 field_schema, required = cls._get_field_schema(unwrap_nullable(field_type), schema_type)
-                print(field_schema)
                 if schema_type == SchemaType.OPENAPI_3:
                     field_schema["nullable"] = True
                 elif schema_type != SchemaType.SWAGGER_V2:
