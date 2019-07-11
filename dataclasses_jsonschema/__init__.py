@@ -100,6 +100,8 @@ def unwrap_optional(optional_type: Any) -> Any:
 
 
 def unwrap_nullable(nullable_type: Any) -> Any:
+    if sys.version_info[:2] == (3, 6):
+        return Union[nullable_type.__args__]
     idx = nullable_type.__args__.index(_NULL_TYPE)
     return Union[nullable_type.__args__[:idx] + nullable_type.__args__[idx+1:]]
 
