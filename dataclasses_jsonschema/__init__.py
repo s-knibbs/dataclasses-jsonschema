@@ -172,13 +172,22 @@ class JsonSchemaMixin:
     }
 
     # Cache of the generated schema
-    _schema: Optional[Dict[SchemaType, JsonDict]] = None
-    _compiled_schema: Optional[Dict[SchemaType, Callable]] = None
-    _definitions: Optional[Dict[SchemaType, JsonDict]] = None
+    _schema: Dict[SchemaType, JsonDict]
+    _compiled_schema: Dict[SchemaType, Callable]
+    _definitions: Dict[SchemaType, JsonDict]
     # Cache of field encode / decode functions
-    _encode_cache: Optional[Dict[Any, _ValueEncoder]] = None
-    _decode_cache: Optional[Dict[Any, _ValueDecoder]] = None
-    _mapped_fields: Optional[List[Tuple[Field, str]]] = None
+    _encode_cache: Dict[Any, _ValueEncoder]
+    _decode_cache: Dict[Any, _ValueDecoder]
+    _mapped_fields: List[Tuple[Field, str]]
+
+    def __init_subclass__(cls):
+        # Initialise caches
+        cls._schema = {}
+        cls._compiled_schema = {}
+        cls._definitions = {}
+        cls._encode_cache = {}
+        cls._decode_cache = {}
+        cls._mapped_fields = []
 
     @classmethod
     def field_mapping(cls) -> Dict[str, str]:
@@ -206,9 +215,6 @@ class JsonSchemaMixin:
         try:
             encoder = cls._encode_cache[field_type]  # type: ignore
         except (KeyError, TypeError):
-            if cls._encode_cache is None:
-                cls._encode_cache = {}
-
             # TODO: Use field_type.__origin__ instead of the type name.
             # This has different behaviour between 3.6 & 3.7 however
             field_type_name = cls._get_field_type_name(field_type)
@@ -283,7 +289,7 @@ class JsonSchemaMixin:
         if not base_fields:
             return _get_fields_uncached()
 
-        if cls._mapped_fields is None:
+        if not cls._mapped_fields:
             cls._mapped_fields = _get_fields_uncached()
         return cls._mapped_fields  # type: ignore
 
@@ -312,8 +318,6 @@ class JsonSchemaMixin:
         try:
             decoder = cls._decode_cache[field_type]  # type: ignore
         except (KeyError, TypeError):
-            if cls._decode_cache is None:
-                cls._decode_cache = {}
             # Note: Only literal types composed of primitive values are currently supported
             if type(value) in JSON_ENCODABLE_TYPES and (field_type in JSON_ENCODABLE_TYPES or is_literal(field_type)):
                 return value
@@ -371,8 +375,6 @@ class JsonSchemaMixin:
     def _validate(cls, data: JsonDict):
         try:
             if fast_validation:
-                if cls._compiled_schema is None:
-                    cls._compiled_schema = {}
                 # TODO: Support validating with other schema types
                 schema_validator = cls._compiled_schema.get(DEFAULT_SCHEMA_TYPE)
                 if schema_validator is None:
@@ -617,9 +619,7 @@ class JsonSchemaMixin:
             return cls.all_json_schemas(schema_type)
 
         definitions: JsonDict = {}
-        if cls._definitions is None:
-            cls._definitions = {schema_type: definitions}
-        elif schema_type not in cls._definitions:
+        if schema_type not in cls._definitions:
             cls._definitions[schema_type] = definitions
         else:
             definitions = cls._definitions[schema_type]
@@ -660,9 +660,6 @@ class JsonSchemaMixin:
 
             if cls.__doc__:
                 schema['description'] = cls.__doc__
-
-            if cls._schema is None:
-                cls._schema = {}
 
             cls._schema[schema_type] = schema
 

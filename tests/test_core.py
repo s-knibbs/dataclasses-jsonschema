@@ -505,7 +505,12 @@ def test_inherited_schema():
         """A cat"""
         hunting_skill: str
 
-    expected_schema = compose_schema({
+    @dataclass
+    class Dog(Pet):
+        """A dog"""
+        breed: str
+
+    expected_cat_schema = compose_schema({
         "description": "A cat",
         "allOf": [
             {"$ref": "#/definitions/Pet"},
@@ -523,7 +528,26 @@ def test_inherited_schema():
             "required": ["name"]
         }
     })
-    assert Cat.json_schema() == expected_schema
+    expected_dog_schema = compose_schema({
+        "description": "A dog",
+        "allOf": [
+            {"$ref": "#/definitions/Pet"},
+            {
+                "type": "object",
+                "properties": {"breed": {"type": "string"}},
+                "required": ["breed"]
+            },
+        ]
+    }, {
+        "Pet": {
+            "description": "A generic pet",
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"]
+        }
+    })
+    assert Cat.json_schema() == expected_cat_schema
+    assert Dog.json_schema() == expected_dog_schema
 
 
 def test_optional_union():
