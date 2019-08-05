@@ -172,22 +172,22 @@ class JsonSchemaMixin:
     }
 
     # Cache of the generated schema
-    _schema: Dict[SchemaType, JsonDict]
-    _compiled_schema: Dict[SchemaType, Callable]
-    _definitions: Dict[SchemaType, JsonDict]
+    __schema: Dict[SchemaType, JsonDict]
+    __compiled_schema: Dict[SchemaType, Callable]
+    __definitions: Dict[SchemaType, JsonDict]
     # Cache of field encode / decode functions
-    _encode_cache: Dict[Any, _ValueEncoder]
-    _decode_cache: Dict[Any, _ValueDecoder]
-    _mapped_fields: List[Tuple[Field, str]]
+    __encode_cache: Dict[Any, _ValueEncoder]
+    __decode_cache: Dict[Any, _ValueDecoder]
+    __mapped_fields: List[Tuple[Field, str]]
 
     def __init_subclass__(cls):
         # Initialise caches
-        cls._schema = {}
-        cls._compiled_schema = {}
-        cls._definitions = {}
-        cls._encode_cache = {}
-        cls._decode_cache = {}
-        cls._mapped_fields = []
+        cls.__schema = {}
+        cls.__compiled_schema = {}
+        cls.__definitions = {}
+        cls.__encode_cache = {}
+        cls.__decode_cache = {}
+        cls.__mapped_fields = []
 
     @classmethod
     def field_mapping(cls) -> Dict[str, str]:
@@ -213,7 +213,7 @@ class JsonSchemaMixin:
         if value is None or value is NULL:
             return value
         try:
-            encoder = cls._encode_cache[field_type]  # type: ignore
+            encoder = cls.__encode_cache[field_type]  # type: ignore
         except (KeyError, TypeError):
             # TODO: Use field_type.__origin__ instead of the type name.
             # This has different behaviour between 3.6 & 3.7 however
@@ -261,7 +261,7 @@ class JsonSchemaMixin:
                     return cls._encode_field(ft.__supertype__, v, o)
             else:
                 def encoder(_, v, __): return v
-            cls._encode_cache[field_type] = encoder  # type: ignore
+            cls.__encode_cache[field_type] = encoder  # type: ignore
         return encoder(field_type, value, omit_none)
 
     @classmethod
@@ -279,7 +279,7 @@ class JsonSchemaMixin:
             type_hints = get_type_hints(cls)
             for f in fields(cls):
                 # Skip internal fields
-                if f.name.startswith("_") or (not base_fields and f.name in base_field_names):
+                if f.name.startswith("__") or (not base_fields and f.name in base_field_names):
                     continue
                 # Note fields() doesn't resolve forward refs
                 f.type = type_hints[f.name]
@@ -289,9 +289,9 @@ class JsonSchemaMixin:
         if not base_fields:
             return _get_fields_uncached()
 
-        if not cls._mapped_fields:
-            cls._mapped_fields = _get_fields_uncached()
-        return cls._mapped_fields  # type: ignore
+        if not cls.__mapped_fields:
+            cls.__mapped_fields = _get_fields_uncached()
+        return cls.__mapped_fields  # type: ignore
 
     def to_dict(self, omit_none: bool = True, validate: bool = False) -> JsonDict:
         """Converts the dataclass instance to a JSON encodable dict, with optional JSON schema validation.
@@ -316,7 +316,7 @@ class JsonSchemaMixin:
             return NULL if is_nullable(field_type) else None
         decoder = None
         try:
-            decoder = cls._decode_cache[field_type]  # type: ignore
+            decoder = cls.__decode_cache[field_type]  # type: ignore
         except (KeyError, TypeError):
             # Note: Only literal types composed of primitive values are currently supported
             if type(value) in JSON_ENCODABLE_TYPES and (field_type in JSON_ENCODABLE_TYPES or is_literal(field_type)):
@@ -368,7 +368,7 @@ class JsonSchemaMixin:
             if decoder is None:
                 warnings.warn(f"Unable to decode value for '{field}: {field_type_name}'")
                 return value
-            cls._decode_cache[field_type] = decoder
+            cls.__decode_cache[field_type] = decoder
         return decoder(field, field_type, value)
 
     @classmethod
@@ -376,10 +376,10 @@ class JsonSchemaMixin:
         try:
             if fast_validation:
                 # TODO: Support validating with other schema types
-                schema_validator = cls._compiled_schema.get(DEFAULT_SCHEMA_TYPE)
+                schema_validator = cls.__compiled_schema.get(DEFAULT_SCHEMA_TYPE)
                 if schema_validator is None:
                     schema_validator = fastjsonschema.compile(cls.json_schema())
-                    cls._compiled_schema[DEFAULT_SCHEMA_TYPE] = schema_validator
+                    cls.__compiled_schema[DEFAULT_SCHEMA_TYPE] = schema_validator
                 schema_validator(data)
             else:
                 validate_func(data, cls.json_schema())
@@ -621,17 +621,17 @@ class JsonSchemaMixin:
             return cls.all_json_schemas(schema_type)
 
         definitions: JsonDict = {}
-        if schema_type not in cls._definitions:
-            cls._definitions[schema_type] = definitions
+        if schema_type not in cls.__definitions:
+            cls.__definitions[schema_type] = definitions
         else:
-            definitions = cls._definitions[schema_type]
+            definitions = cls.__definitions[schema_type]
 
         if schema_type in (SchemaType.SWAGGER_V3, SchemaType.SWAGGER_V2) and not embeddable:
             schema_type = SchemaType.DRAFT_06
             warnings.warn("'Swagger schema types unsupported when 'embeddable=False', using 'SchemaType.DRAFT_06'")
 
-        if cls._schema is not None and schema_type in cls._schema:
-            schema = cls._schema[schema_type]
+        if cls.__schema is not None and schema_type in cls.__schema:
+            schema = cls.__schema[schema_type]
         else:
             properties = {}
             required = []
@@ -663,7 +663,7 @@ class JsonSchemaMixin:
             if cls.__doc__:
                 schema['description'] = cls.__doc__
 
-            cls._schema[schema_type] = schema
+            cls.__schema[schema_type] = schema
 
         if embeddable:
             return {**definitions, cls.__name__: schema}

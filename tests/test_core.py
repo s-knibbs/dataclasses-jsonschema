@@ -611,3 +611,26 @@ def test_nullable_field():
     expected_dict = {"name": "Joe Bloggs", "manager": None}
     assert Employee.from_dict(expected_dict) == expected_obj
     assert expected_dict == expected_obj.to_dict()
+
+
+def test_underscore_fields():
+    @dataclass
+    class Album(JsonSchemaMixin):
+        """An album"""
+        _id: int
+        name: str
+
+    expected_json_schema = compose_schema({
+        "type": "object",
+        "description": "An album",
+        "properties": {
+            "name": {"type": "string"},
+            "_id": {"type": "integer"}
+        },
+        "required": ["_id", "name"]
+    })
+    assert Album.json_schema() == expected_json_schema
+    expected_data = {"name": "Foo", "_id": 5}
+    expected_obj = Album(_id=5, name="Foo")
+    assert expected_data == expected_obj.to_dict()
+    assert expected_obj == Album.from_dict(expected_data)
