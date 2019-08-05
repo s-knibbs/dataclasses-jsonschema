@@ -1,5 +1,7 @@
 import datetime
 from _decimal import Decimal
+from enum import Enum
+
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address
 from typing import List, NewType, Optional, Union
@@ -453,6 +455,11 @@ def test_literal_types():
 
 def test_from_object():
 
+    class Genre(Enum):
+        HORROR = "horror"
+        BIOGRAPHY = "biography"
+        THRILLER = "thriller"
+
     class AuthorModel:
 
         def __init__(self, name, age, books):
@@ -462,15 +469,17 @@ def test_from_object():
 
     class BookModel:
 
-        def __init__(self, name, first_print, publisher):
+        def __init__(self, name, first_print, publisher, genre):
             self.name = name
             self.first_print = first_print
             self.publisher = publisher
+            self.genre = genre
 
     @dataclass
     class Book(JsonSchemaMixin):
         name: str
         publisher: str
+        genre: Genre
         first_print: Optional[datetime.datetime] = None
 
     @dataclass
@@ -479,8 +488,10 @@ def test_from_object():
         age: Optional[int] = None
         books: Optional[List[Book]] = None
 
-    sample_author = AuthorModel("Joe Bloggs", 32, [BookModel("Hello World!", datetime.datetime.utcnow(), "ACME Corp")])
-    expected_author = Author("Joe Bloggs", books=[Book("Hello World!", "ACME Corp")])
+    sample_author = AuthorModel(
+        "Joe Bloggs", 32, [BookModel("Hello World!", datetime.datetime.utcnow(), "ACME Corp", "biography")]
+    )
+    expected_author = Author("Joe Bloggs", books=[Book("Hello World!", "ACME Corp", Genre.BIOGRAPHY)])
     assert Author.from_object(sample_author, exclude=('age', ('books', ('first_print',)))) == expected_author
 
     with pytest.raises(ValueError):
