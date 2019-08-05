@@ -409,7 +409,7 @@ class JsonSchemaMixin:
         return instance
 
     @classmethod
-    def from_object(cls: Type[T], obj: Any, exclude: FieldExcludeList = tuple()):
+    def from_object(cls: Type[T], obj: Any, exclude: FieldExcludeList = tuple()) -> T:
         """Returns a dataclass instance from another object (typically an ORM model).
         The `exclude` parameter is a tuple of field names or (field.name, nested_exclude)
         to exclude from the conversion. For example `exclude=('artist_name', ('albums', ('tracks',))` will exclude
@@ -434,6 +434,8 @@ class JsonSchemaMixin:
             field_type_name = cls._get_field_type_name(ft)
             if cls._is_json_schema_subclass(ft):
                 values[field.name] = ft.from_object(getattr(obj, field.name), exclude=sub_exclude)
+            elif is_enum(ft):
+                values[field.name] = ft(getattr(obj, field.name))
             elif field_type_name == "List" and cls._is_json_schema_subclass(ft.__args__[0]):
                 values[field.name] = [
                     ft.__args__[0].from_object(v, exclude=sub_exclude) for v in getattr(obj, field.name)
