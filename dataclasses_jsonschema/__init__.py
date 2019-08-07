@@ -432,16 +432,20 @@ class JsonSchemaMixin:
             if is_optional(ft):
                 ft = unwrap_optional(ft)
             field_type_name = cls._get_field_type_name(ft)
-            if cls._is_json_schema_subclass(ft):
-                values[field.name] = ft.from_object(getattr(obj, field.name), exclude=sub_exclude)
+
+            from_value = getattr(obj, field.name)
+            if from_value is None:
+                values[field.name] = from_value
+            elif cls._is_json_schema_subclass(ft):
+                values[field.name] = ft.from_object(from_value, exclude=sub_exclude)
             elif is_enum(ft):
-                values[field.name] = ft(getattr(obj, field.name))
+                values[field.name] = ft(from_value)
             elif field_type_name == "List" and cls._is_json_schema_subclass(ft.__args__[0]):
                 values[field.name] = [
-                    ft.__args__[0].from_object(v, exclude=sub_exclude) for v in getattr(obj, field.name)
+                    ft.__args__[0].from_object(v, exclude=sub_exclude) for v in from_value
                 ]
             else:
-                values[field.name] = getattr(obj, field.name)
+                values[field.name] = from_value
 
         instance = cls(**init_values)  # type: ignore
         for field_name, value in non_init_values.items():

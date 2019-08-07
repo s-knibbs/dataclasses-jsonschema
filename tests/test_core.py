@@ -479,7 +479,7 @@ def test_from_object():
     class Book(JsonSchemaMixin):
         name: str
         publisher: str
-        genre: Genre
+        genre: Optional[Genre]
         first_print: Optional[datetime.datetime] = None
 
     @dataclass
@@ -493,6 +493,12 @@ def test_from_object():
     )
     expected_author = Author("Joe Bloggs", books=[Book("Hello World!", "ACME Corp", Genre.BIOGRAPHY)])
     assert Author.from_object(sample_author, exclude=('age', ('books', ('first_print',)))) == expected_author
+
+    sample_author_2 = AuthorModel(
+        "Joe Bloggs", 32, [BookModel("Hello World!", datetime.datetime.utcnow(), "ACME Corp", None)]
+    )
+    expected_author_2 = Author("Joe Bloggs", books=[Book("Hello World!", "ACME Corp", None)])
+    assert Author.from_object(sample_author_2, exclude=('age', ('books', ('first_print',)))) == expected_author_2
 
     with pytest.raises(ValueError):
         Author.from_object(sample_author, exclude=('age', ('books', ('publisher',))))
