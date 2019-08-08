@@ -1,9 +1,8 @@
 from typing import Any, Type, Optional, Union, Dict
 
-from apispec.exceptions import DuplicateComponentNameError
-
 try:
     from apispec import BasePlugin, APISpec
+    from apispec.exceptions import DuplicateComponentNameError
 except ImportError:
     raise ImportError("Missing the 'apispec' package. Try installing with 'dataclasses-jsonschema[apispec]'")
 
