@@ -2,6 +2,7 @@ from typing import Any, Type, Optional, Union, Dict
 
 try:
     from apispec import BasePlugin, APISpec
+    from apispec.exceptions import DuplicateComponentNameError
 except ImportError:
     raise ImportError("Missing the 'apispec' package. Try installing with 'dataclasses-jsonschema[apispec]'")
 
@@ -41,7 +42,11 @@ class DataclassesPlugin(BasePlugin):
         for schema_name in json_schemas:
             if name == schema_name:
                 continue
-            self.spec.components.schema(schema_name, schema=json_schemas[schema_name])
+            try:
+                self.spec.components.schema(schema_name, schema=json_schemas[schema_name])
+            except DuplicateComponentNameError:
+                # Catch duplicate schemas added due to multiple classes referencing the same dependent class
+                pass
         return json_schemas[name]
 
     def parameter_helper(self, parameter, **kwargs):

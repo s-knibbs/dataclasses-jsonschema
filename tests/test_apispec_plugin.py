@@ -96,7 +96,42 @@ EXPECTED_API_SPEC = {
                     }
                 },
                 "required": ["categories", "name"]
+            },
+            "Cat": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Pet"
+                    },
+                    {
+                        "type": "object",
+                        "required": [
+                            "colour"
+                        ],
+                        "properties": {
+                            "colour": {"type": "string"}
+                        }
+                    }
+                ],
+                "description": "A cat"
+            },
+            "Dog": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Pet"
+                    },
+                    {
+                        "type": "object",
+                        "required": [
+                            "favourite_food"
+                        ],
+                        "properties": {
+                            "favourite_food": {"type": "string"}
+                        }
+                    }
+                ],
+                "description": "A dog"
             }
+
         }
     }
 }
@@ -116,7 +151,18 @@ def test_api_spec_schema():
         categories: List[Category]
         name: str
 
-    spec.components.schema("Pet", schema=Pet)
+    @dataclass
+    class Cat(Pet):
+        """A cat"""
+        colour: str
+
+    @dataclass
+    class Dog(Pet):
+        """A dog"""
+        favourite_food: str
+
+    spec.components.schema("Cat", schema=Cat)
+    spec.components.schema("Dog", schema=Dog)
     with app.test_request_context():
         spec.path(view=random_pet)
     spec_json = json.dumps(spec.to_dict(), indent=2)
