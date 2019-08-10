@@ -1,3 +1,4 @@
+import json
 import sys
 import functools
 from _decimal import Decimal
@@ -730,3 +731,10 @@ class JsonSchemaMixin:
             # The types in the 'typing' module lack the __name__ attribute
             match = re.match(r'typing\.([A-Za-z]+)', str(field_type))
             return str(field_type) if match is None else match.group(1)
+
+    @classmethod
+    def from_json(cls: Type[T], data: str, validate: bool = True, **json_kwargs) -> T:
+        return cls.from_dict(json.loads(data, **json_kwargs), validate)
+
+    def to_json(self, omit_none: bool = True, validate: bool = False, **json_kwargs) -> str:
+        return json.dumps(self.to_dict(omit_none, validate), **json_kwargs)
