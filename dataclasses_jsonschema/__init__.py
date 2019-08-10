@@ -179,8 +179,15 @@ class JsonSchemaMixin:
     __encode_cache: Dict[Any, _ValueEncoder]
     __decode_cache: Dict[Any, _ValueDecoder]
     __mapped_fields: List[Tuple[Field, str]]
+    __discriminator_name: Optional[str]
+    # True if __discriminator_name is inherited from the base class
+    __discriminator_inherited: bool
 
-    def __init_subclass__(cls):
+    @classmethod
+    def _discriminator(cls) -> Optional[str]:
+        return cls.__discriminator_name
+
+    def __init_subclass__(cls, discriminator: Optional[Union[str, bool]] = None):
         # Initialise caches
         cls.__schema = {}
         cls.__compiled_schema = {}
@@ -188,6 +195,24 @@ class JsonSchemaMixin:
         cls.__encode_cache = {}
         cls.__decode_cache = {}
         cls.__mapped_fields = []
+        cls.__discriminator_inherited = False
+        if discriminator is not None:
+            cls.__discriminator_name = discriminator if isinstance(discriminator, str) else f"{cls.__name__}Type"
+        else:
+            dataclass_bases = [
+                klass for klass in cls.__bases__ if is_dataclass(klass) and issubclass(klass, JsonSchemaMixin)
+            ]
+            if len(dataclass_bases) > 0:
+                base_discriminators = [
+                    base._discriminator() for base in dataclass_bases if base._discriminator() is not None
+                ]
+                if len(base_discriminators):
+                    if len(base_discriminators) > 1:
+                        raise TypeError("Multiple bases with discriminators is unsupported")
+                    cls.__discriminator_name = base_discriminators[0]
+                    cls.__discriminator_inherited = True
+            else:
+                cls.__discriminator_name = None
 
     @classmethod
     def field_mapping(cls) -> Dict[str, str]:
@@ -306,6 +331,10 @@ class JsonSchemaMixin:
             if value is NULL:
                 value = None
             data[target_field] = value
+
+        if self.__discriminator_name is not None:
+            data[self.__discriminator_name] = self.__class__.__name__
+
         if validate:
             self._validate(data)
         return data
@@ -391,6 +420,12 @@ class JsonSchemaMixin:
         """Returns a dataclass instance with all nested classes converted from the dict given"""
         if cls is JsonSchemaMixin:
             raise NotImplementedError
+
+        if cls.__discriminator_name is not None and cls.__discriminator_name in data:
+            if data[cls.__discriminator_name] != cls.__name__:
+                for subclass in cls.__subclasses__():
+                    if subclass.__name__ == data[cls.__discriminator_name]:
+                        return subclass.from_dict(data, validate)
 
         init_values: Dict[str, Any] = {}
         non_init_values: Dict[str, Any] = {}
@@ -649,6 +684,12 @@ class JsonSchemaMixin:
                 'required': required,
                 'properties': properties
             }
+
+            if cls.__discriminator_name is not None and \
+                    schema_type == SchemaType.OPENAPI_3 and \
+                    not cls.__discriminator_inherited:
+                schema['discriminator'] = {'propertyName': cls.__discriminator_name}
+                required.append(cls.__discriminator_name)
 
             # Needed for Draft 04 backwards compatibility
             if len(required) == 0:

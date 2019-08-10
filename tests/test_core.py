@@ -640,3 +640,45 @@ def test_underscore_fields():
     expected_obj = Album(_id=5, name="Foo")
     assert expected_data == expected_obj.to_dict()
     assert expected_obj == Album.from_dict(expected_data)
+
+
+def test_discriminators():
+    @dataclass
+    class Pet(JsonSchemaMixin, discriminator=True):
+        """A generic pet"""
+        name: str
+
+    @dataclass
+    class Dog(Pet):
+        """A dog"""
+        breed: str
+
+    expected_dog_schema = {
+        "Dog": {
+            "description": "A dog",
+            "allOf": [
+                {"$ref": "#/components/schemas/Pet"},
+                {
+                    "type": "object",
+                    "properties": {"breed": {"type": "string"}},
+                    "required": ["breed"]
+                },
+            ]
+        },
+        "Pet": {
+            "description": "A generic pet",
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name", "PetType"],
+            "discriminator": {"propertyName": "PetType"}
+        }
+    }
+
+    assert Dog.json_schema(embeddable=True, schema_type=SchemaType.OPENAPI_3) == expected_dog_schema
+    expected_dog = {
+        "PetType": "Dog",
+        "name": "Fido",
+        "breed": "Dalmation"
+    }
+    assert Dog(name="Fido", breed="Dalmation").to_dict() == expected_dog
+    assert Dog(name="Fido", breed="Dalmation") == Pet.from_dict(expected_dog)
