@@ -219,6 +219,41 @@ def test_serialise_deserialise():
     assert data == f.to_dict()
 
 
+def test_from_json_to_json():
+    data = """
+{
+  "a": "2018-06-03T12:00:00+00:00",
+  "b": [
+    {
+      "z": 1.2,
+      "y": 1.5
+    }
+  ],
+  "c": {
+    "Mon": 1,
+    "Tue": 2
+  },
+  "d": "Wednesday",
+  "f": [
+    "xyz",
+    6
+  ],
+  "g": [
+    "abc"
+  ],
+  "e": "testing",
+  "h": {
+    "z": 0.5,
+    "y": 1.0
+  }
+}
+"""
+    f = Foo.from_json(data)
+    assert f.f == ('xyz', 6)
+    assert f.g == ('abc',)
+    assert data.strip() == f.to_json(indent=2)
+
+
 def test_invalid_data():
     with pytest.raises(ValidationError):
         Point.from_dict({'z': 3.14, 'y': 'wrong'})
