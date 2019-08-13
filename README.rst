@@ -51,7 +51,8 @@ Examples
         y: float
 
 
-Generate the schema:
+Schema Generation
+^^^^^^^^^^^^^^^^^
 
 .. code:: python
 
@@ -66,14 +67,15 @@ Generate the schema:
         'required': ['x', 'y']
     }
 
-Serialise data:
-
+Data Serialisation
+^^^^^^^^^^^^^^^^^^
 .. code:: python
 
     >>> Point(x=3.5, y=10.1).to_dict()
     {'x': 3.5, 'y': 10.1}
 
-Deserialise data:
+Deserialisation
+^^^^^^^^^^^^^^^
 
 .. code:: python
 
@@ -82,7 +84,8 @@ Deserialise data:
     >>> Point.from_dict({'x': 3.14, y: 'wrong'})
     dataclasses_jsonschema.ValidationError: 'wrong' is not of type 'number'
 
-Generate a schema for embedding into an API spec:
+Generating multiple schemas
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code:: python
 
@@ -115,7 +118,8 @@ Generate a schema for embedding into an API spec:
                  'type': 'object'}}
         
 
-Custom validation rules can be added using `NewType <https://docs.python.org/3/library/typing.html#newtype>`_:
+Custom validation using `NewType <https://docs.python.org/3/library/typing.html#newtype>`_
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code:: python
 
