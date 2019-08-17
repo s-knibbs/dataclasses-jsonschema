@@ -744,5 +744,6 @@ def test_set_decode_encode():
         content="Lorem ipsum dolor sit amet, consectetur adipiscing elit...",
         tags={"foo", "bar"}
     )
-    assert expected_blog.to_dict() == expected_blog_dict
+    assert isinstance(expected_blog.to_dict()["tags"], list)
+    assert len(expected_blog.to_dict()["tags"]) == 2
     assert BlogArticle.from_dict(expected_blog_dict) == expected_blog
