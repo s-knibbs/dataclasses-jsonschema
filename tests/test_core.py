@@ -4,7 +4,7 @@ from enum import Enum
 
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address
-from typing import List, NewType, Optional, Union
+from typing import List, NewType, Optional, Union, Set
 from typing_extensions import Final, Literal
 from uuid import UUID
 
@@ -717,3 +717,32 @@ def test_discriminators():
     }
     assert Dog(name="Fido", breed="Dalmation").to_dict() == expected_dog
     assert Dog(name="Fido", breed="Dalmation") == Pet.from_dict(expected_dog)
+
+
+def test_set_decode_encode():
+    @dataclass
+    class BlogArticle(JsonSchemaMixin):
+        """A blog article"""
+        content: str
+        tags: Set[str]
+
+    expected_schema = compose_schema({
+        "type": "object",
+        "description": "A blog article",
+        "properties": {
+            "content": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": True}
+        },
+        "required": ["content", "tags"]
+    })
+    assert expected_schema == BlogArticle.json_schema()
+    expected_blog_dict = {
+        "content": "Lorem ipsum dolor sit amet, consectetur adipiscing elit...",
+        "tags": ["foo", "bar"]
+    }
+    expected_blog = BlogArticle(
+        content="Lorem ipsum dolor sit amet, consectetur adipiscing elit...",
+        tags={"foo", "bar"}
+    )
+    assert expected_blog.to_dict() == expected_blog_dict
+    assert BlogArticle.from_dict(expected_blog_dict) == expected_blog

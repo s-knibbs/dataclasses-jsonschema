@@ -39,6 +39,11 @@ JSON_ENCODABLE_TYPES = {
     bool: {'type': 'boolean'},
     float: {'type': 'number'}
 }
+SEQUENCE_TYPES = {
+    'Sequence': list,
+    'List': list,
+    'Set': set
+}
 
 
 class ValidationError(Exception):
@@ -274,7 +279,7 @@ class JsonSchemaMixin:
                         cls._encode_field(ft.__args__[0], k, o): cls._encode_field(ft.__args__[1], v, o)
                         for k, v in val.items()
                     }
-            elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
+            elif field_type_name in SEQUENCE_TYPES or (field_type_name == "Tuple" and ... in field_type.__args__):
                 def encoder(ft, val, o): return [cls._encode_field(ft.__args__[0], v, o) for v in val]
             elif field_type_name == 'Tuple':
                 def encoder(ft, val, o):
@@ -378,8 +383,8 @@ class JsonSchemaMixin:
                         cls._decode_field(f, ft.__args__[0], k): cls._decode_field(f, ft.__args__[1], v)
                         for k, v in val.items()
                     }
-            elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
-                seq_type = tuple if field_type_name == "Tuple" else list
+            elif field_type_name in SEQUENCE_TYPES or (field_type_name == "Tuple" and ... in field_type.__args__):
+                seq_type = tuple if field_type_name == "Tuple" else SEQUENCE_TYPES[field_type_name]
 
                 def decoder(f, ft, val):
                     return seq_type(cls._decode_field(f, ft.__args__[0], v) for v in val)
@@ -587,10 +592,12 @@ class JsonSchemaMixin:
                     field_schema['additionalProperties'] = cls._get_field_schema(
                         field_type.__args__[1], schema_type
                     )[0]
-            elif field_type_name in ('Sequence', 'List') or (field_type_name == "Tuple" and ... in field_type.__args__):
+            elif field_type_name in SEQUENCE_TYPES or (field_type_name == "Tuple" and ... in field_type.__args__):
                 field_schema = {'type': 'array'}
                 if field_type.__args__[0] is not Any:
                     field_schema['items'] = cls._get_field_schema(field_type.__args__[0], schema_type)[0]
+                if field_type_name == "Set":
+                    field_schema['uniqueItems'] = True
             elif field_type_name == "Tuple":
                 tuple_len = len(field_type.__args__)
                 # TODO: How do we handle Optional type within lists / tuples
