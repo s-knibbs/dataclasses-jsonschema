@@ -532,7 +532,7 @@ class JsonSchemaMixin:
 
     @classmethod
     def _get_field_schema(cls, field: Union[Field, Type], schema_type: SchemaType) -> Tuple[JsonDict, bool]:
-        field_schema: JsonDict = {'type': 'object'}
+        field_schema: JsonDict = {}
         required = True
 
         if isinstance(field, Field):

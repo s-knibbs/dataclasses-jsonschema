@@ -4,7 +4,7 @@ from enum import Enum
 
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address
-from typing import List, NewType, Optional, Union, Set
+from typing import List, NewType, Optional, Union, Set, Any
 from typing_extensions import Final, Literal
 from uuid import UUID
 
@@ -747,3 +747,22 @@ def test_set_decode_encode():
     assert isinstance(expected_blog.to_dict()["tags"], list)
     assert len(expected_blog.to_dict()["tags"]) == 2
     assert BlogArticle.from_dict(expected_blog_dict) == expected_blog
+
+
+def test_any_type_schema():
+    @dataclass
+    class GraphNode(JsonSchemaMixin):
+        """A graph node"""
+        id: int
+        data: Any
+
+    expected_schema = compose_schema({
+        "type": "object",
+        "description": "A graph node",
+        "properties": {
+            "id": {"type": "integer"},
+            "data": {}
+        },
+        "required": ["id", "data"]
+    })
+    assert GraphNode.json_schema() == expected_schema
