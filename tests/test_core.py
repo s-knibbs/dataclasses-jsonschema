@@ -766,3 +766,23 @@ def test_any_type_schema():
         "required": ["id", "data"]
     })
     assert GraphNode.json_schema() == expected_schema
+
+
+def test_additional_properties_allowed():
+    @dataclass
+    class Scorpion(JsonSchemaMixin, allow_additional_props=False):
+        """A scorpion"""
+        species: str
+        venom_rating: int
+
+    expected_schema = compose_schema({
+        "type": "object",
+        "description": "A scorpion",
+        "properties": {
+            "species": {"type": "string"},
+            "venom_rating": {"type": "integer"},
+        },
+        "required": ["species", "venom_rating"],
+        "additionalProperties": False,
+    })
+    assert Scorpion.json_schema() == expected_schema

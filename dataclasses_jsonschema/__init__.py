@@ -188,12 +188,13 @@ class JsonSchemaMixin:
     __discriminator_name: Optional[str]
     # True if __discriminator_name is inherited from the base class
     __discriminator_inherited: bool
+    __allow_additional_props: bool
 
     @classmethod
     def _discriminator(cls) -> Optional[str]:
         return cls.__discriminator_name
 
-    def __init_subclass__(cls, discriminator: Optional[Union[str, bool]] = None):
+    def __init_subclass__(cls, discriminator: Optional[Union[str, bool]] = None, allow_additional_props: bool = True):
         # Initialise caches
         cls.__schema = {}
         cls.__compiled_schema = {}
@@ -219,6 +220,7 @@ class JsonSchemaMixin:
                     cls.__discriminator_inherited = True
             else:
                 cls.__discriminator_name = None
+        cls.__allow_additional_props = allow_additional_props
 
     @classmethod
     def field_mapping(cls) -> Dict[str, str]:
@@ -692,6 +694,9 @@ class JsonSchemaMixin:
                 'required': required,
                 'properties': properties
             }
+
+            if not cls.__allow_additional_props:
+                schema["additionalProperties"] = False
 
             if cls.__discriminator_name is not None and \
                     schema_type == SchemaType.OPENAPI_3 and \
