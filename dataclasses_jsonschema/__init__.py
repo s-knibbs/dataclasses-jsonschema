@@ -1,3 +1,4 @@
+import inspect
 import json
 import sys
 import functools
@@ -138,6 +139,13 @@ def _to_camel_case(value: str) -> str:
 
 
 @dataclass
+class JsonSchemaField:
+    field: Field
+    mapped_name: str
+    is_property: bool = False
+
+
+@dataclass
 class FieldMeta:
     schema_type: SchemaType
     default: Any = None
@@ -184,17 +192,23 @@ class JsonSchemaMixin:
     # Cache of field encode / decode functions
     __encode_cache: Dict[Any, _ValueEncoder]
     __decode_cache: Dict[Any, _ValueDecoder]
-    __mapped_fields: List[Tuple[Field, str]]
+    __mapped_fields: List[JsonSchemaField]
     __discriminator_name: Optional[str]
     # True if __discriminator_name is inherited from the base class
     __discriminator_inherited: bool
     __allow_additional_props: bool
+    __serialise_properties: Union[Tuple[str, ...], bool]
 
     @classmethod
     def _discriminator(cls) -> Optional[str]:
         return cls.__discriminator_name
 
-    def __init_subclass__(cls, discriminator: Optional[Union[str, bool]] = None, allow_additional_props: bool = True):
+    def __init_subclass__(
+            cls,
+            discriminator: Optional[Union[str, bool]] = None,
+            allow_additional_props: bool = True,
+            serialise_properties: Union[Tuple[str, ...], bool] = False,
+    ):
         # Initialise caches
         cls.__schema = {}
         cls.__compiled_schema = {}
@@ -203,6 +217,7 @@ class JsonSchemaMixin:
         cls.__decode_cache = {}
         cls.__mapped_fields = []
         cls.__discriminator_inherited = False
+        cls.__serialise_properties = serialise_properties
         if discriminator is not None:
             cls.__discriminator_name = discriminator if isinstance(discriminator, str) else f"{cls.__name__}Type"
         else:
@@ -298,7 +313,7 @@ class JsonSchemaMixin:
         return encoder(field_type, value, omit_none)
 
     @classmethod
-    def _get_fields(cls, base_fields=True) -> List[Tuple[Field, str]]:
+    def _get_fields(cls, base_fields=True) -> List[JsonSchemaField]:
 
         def _get_fields_uncached():
             dataclass_bases = [
@@ -316,7 +331,21 @@ class JsonSchemaMixin:
                     continue
                 # Note fields() doesn't resolve forward refs
                 f.type = type_hints[f.name]
-                mapped_fields.append((f, cls.field_mapping().get(f.name, f.name)))
+                mapped_fields.append(JsonSchemaField(f, cls.field_mapping().get(f.name, f.name)))
+
+            if cls.__serialise_properties:
+                include_properties = None
+                if isinstance(cls.__serialise_properties, tuple):
+                    include_properties = set(cls.__serialise_properties)
+
+                members = inspect.getmembers(cls, inspect.isdatadescriptor)
+                for name, member in members:
+                    if name != "__weakref__" and (include_properties is None or name in include_properties):
+                        f = Field(MISSING, None, None, None, None, None, None)
+                        f.name = name
+                        f.type = member.fget.__annotations__['return']
+                        mapped_fields.append(JsonSchemaField(f, name, is_property=True))
+
             return mapped_fields
 
         if not base_fields:
@@ -332,13 +361,13 @@ class JsonSchemaMixin:
         If omit_none (default True) is specified, any items with value None are removed
         """
         data = {}
-        for field, target_field in self._get_fields():
-            value = self._encode_field(field.type, getattr(self, field.name), omit_none)
+        for f in self._get_fields():
+            value = self._encode_field(f.field.type, getattr(self, f.field.name), omit_none)
             if omit_none and value is None:
                 continue
             if value is NULL:
                 value = None
-            data[target_field] = value
+            data[f.mapped_name] = value
 
         if self.__discriminator_name is not None:
             data[self.__discriminator_name] = self.__class__.__name__
@@ -440,10 +469,11 @@ class JsonSchemaMixin:
         if validate:
             cls._validate(data)
 
-        for field, target_field in cls._get_fields():
-            values = init_values if field.init else non_init_values
-            if target_field in data or (field.default == MISSING and field.default_factory == MISSING):  # type: ignore
-                values[field.name] = cls._decode_field(field.name, field.type, data.get(target_field))
+        for f in cls._get_fields():
+            values = init_values if f.field.init else non_init_values
+            if f.mapped_name in data or (
+                    f.field.default == MISSING and f.field.default_factory == MISSING):  # type: ignore
+                values[f.field.name] = cls._decode_field(f.field.name, f.field.type, data.get(f.mapped_name))
 
         # Need to ignore the type error here, since mypy doesn't know that subclasses are dataclasses
         instance = cls(**init_values)  # type: ignore
@@ -461,34 +491,34 @@ class JsonSchemaMixin:
         exclude_dict = dict([(f[0], f[1]) if isinstance(f, tuple) else (f, None) for f in exclude])
         init_values: Dict[str, Any] = {}
         non_init_values: Dict[str, Any] = {}
-        for field, _ in cls._get_fields():
+        for f in cls._get_fields():
             sub_exclude: FieldExcludeList = tuple()
-            if field.name in exclude_dict:
-                if exclude_dict[field.name] is None:
-                    if field.default == MISSING and field.default == MISSING:
+            if f.field.name in exclude_dict:
+                if exclude_dict[f.field.name] is None:
+                    if f.field.default == MISSING and f.field.default == MISSING:
                         raise ValueError("Excluded fields must have a default value")
                     continue
                 else:
-                    sub_exclude = exclude_dict[field.name]  # type: ignore
-            values = init_values if field.init else non_init_values
-            ft = field.type
+                    sub_exclude = exclude_dict[f.field.name]  # type: ignore
+            values = init_values if f.field.init else non_init_values
+            ft = f.field.type
             if is_optional(ft):
                 ft = unwrap_optional(ft)
             field_type_name = cls._get_field_type_name(ft)
 
-            from_value = getattr(obj, field.name)
+            from_value = getattr(obj, f.field.name)
             if from_value is None:
-                values[field.name] = from_value
+                values[f.field.name] = from_value
             elif cls._is_json_schema_subclass(ft):
-                values[field.name] = ft.from_object(from_value, exclude=sub_exclude)
+                values[f.field.name] = ft.from_object(from_value, exclude=sub_exclude)
             elif is_enum(ft):
-                values[field.name] = ft(from_value)
+                values[f.field.name] = ft(from_value)
             elif field_type_name == "List" and cls._is_json_schema_subclass(ft.__args__[0]):
-                values[field.name] = [
+                values[f.field.name] = [
                     ft.__args__[0].from_object(v, exclude=sub_exclude) for v in from_value
                 ]
             else:
-                values[field.name] = from_value
+                values[f.field.name] = from_value
 
         instance = cls(**init_values)  # type: ignore
         for field_name, value in non_init_values.items():
@@ -684,11 +714,14 @@ class JsonSchemaMixin:
         else:
             properties = {}
             required = []
-            for field, target_field in cls._get_fields(base_fields=False):
-                properties[target_field], is_required = cls._get_field_schema(field, schema_type)
-                cls._get_field_definitions(field.type, definitions, schema_type)
-                if is_required:
-                    required.append(target_field)
+            for f in cls._get_fields(base_fields=False):
+                properties[f.mapped_name], is_required = cls._get_field_schema(f.field, schema_type)
+                if f.is_property:
+                    properties[f.mapped_name]["readOnly"] = True
+                cls._get_field_definitions(f.field.type, definitions, schema_type)
+                # Only add 'readOnly' properties to required for OpenAPI 3
+                if is_required and (not f.is_property or schema_type == SchemaType.OPENAPI_3):
+                    required.append(f.mapped_name)
             schema = {
                 'type': 'object',
                 'required': required,
