@@ -786,3 +786,63 @@ def test_additional_properties_allowed():
         "additionalProperties": False,
     })
     assert Scorpion.json_schema() == expected_schema
+
+
+def test_property_serialisation():
+    @dataclass
+    class Rectangle(JsonSchemaMixin, serialise_properties=("area",)):
+        """A rectangle"""
+        width: float
+        height: float
+
+        @property
+        def area(self) -> float:
+            return self.width * self.height
+
+        @property
+        def perimeter(self) -> float:
+            return 2 * self.width + 2 * self.height
+
+    expected_schema = compose_schema({
+        "type": "object",
+        "description": "A rectangle",
+        "properties": {
+            "width": {"type": "number"},
+            "height": {"type": "number"},
+            "area": {"type": "number", "readOnly": True}
+        },
+        "required": ["width", "height"]
+    })
+    assert Rectangle.json_schema() == expected_schema
+    rect = Rectangle(10, 20)
+    assert rect.to_dict() == {"width": 10, "height": 20, "area": 200}
+    assert Rectangle.from_dict({"width": 10, "height": 20}) == rect
+
+
+def test_property_serialisation_all_properties():
+    @dataclass
+    class Rectangle(JsonSchemaMixin, serialise_properties=True):
+        """A rectangle"""
+        width: float
+        height: float
+
+        @property
+        def area(self) -> float:
+            return self.width * self.height
+
+        @property
+        def perimeter(self) -> float:
+            return 2 * self.width + 2 * self.height
+
+    expected_schema = compose_schema({
+        "type": "object",
+        "description": "A rectangle",
+        "properties": {
+            "width": {"type": "number"},
+            "height": {"type": "number"},
+            "area": {"type": "number", "readOnly": True},
+            "perimeter": {"type": "number", "readOnly": True}
+        },
+        "required": ["width", "height"]
+    })
+    assert Rectangle.json_schema() == expected_schema
