@@ -24,7 +24,7 @@ setup(
     url='https://github.com/s-knibbs/dataclasses-jsonschema',
     install_requires=requires,
     extras_require={
-        'fast-validation': ["fastjsonschema>=2.13"],
+        'fast-validation': ["fastjsonschema==2.13"],
         'apispec': ["apispec"]
     },
     setup_requires=['pytest-runner', 'setuptools_scm'],
