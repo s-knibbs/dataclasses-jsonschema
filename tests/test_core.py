@@ -846,3 +846,17 @@ def test_property_serialisation_all_properties():
         "required": ["width", "height"]
     })
     assert Rectangle.json_schema() == expected_schema
+
+
+def test_unrecognized_enum_value():
+    class PetType(Enum):
+        CAT = "cat"
+        DOG = "dog"
+
+    @dataclass
+    class Pet(JsonSchemaMixin):
+        name: str
+        type: PetType
+
+    p = Pet.from_dict({'name': 'snakey', 'type': 'python'}, validate_enums=False)
+    assert p.type == "python"
