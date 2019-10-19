@@ -860,3 +860,16 @@ def test_unrecognized_enum_value():
 
     p = Pet.from_dict({'name': 'snakey', 'type': 'python'}, validate_enums=False)
     assert p.type == "python"
+
+
+def test_inheritance_and_additional_properties_disallowed():
+    @dataclass
+    class Pet(JsonSchemaMixin):
+        name: str
+
+    # Currently this should raise an error until https://github.com/s-knibbs/dataclasses-jsonschema/issues/111
+    # is implemented
+    with pytest.raises(TypeError):
+        @dataclass
+        class Cat(Pet, allow_additional_props=False):
+            hunting_skill: str
