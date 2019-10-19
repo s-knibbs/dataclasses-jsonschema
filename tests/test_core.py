@@ -889,3 +889,17 @@ def test_inherited_field_narrowing():
     })
 
     assert NarrowedObject.json_schema() == expected_schema
+
+
+def test_unrecognized_enum_value():
+    class PetType(Enum):
+        CAT = "cat"
+        DOG = "dog"
+
+    @dataclass
+    class Pet(JsonSchemaMixin):
+        name: str
+        type: PetType
+
+    p = Pet.from_dict({'name': 'snakey', 'type': 'python'}, validate_enums=False)
+    assert p.type == "python"
