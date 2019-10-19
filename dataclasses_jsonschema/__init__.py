@@ -325,15 +325,15 @@ class JsonSchemaMixin:
             dataclass_bases = [
                 klass for klass in cls.__bases__ if is_dataclass(klass) and issubclass(klass, JsonSchemaMixin)
             ]
-            base_field_names = set()
+            base_fields_types = set()
             for base in dataclass_bases:
-                base_field_names |= {f.name for f in fields(base)}
+                base_fields_types |= {(f.name, f.type) for f in fields(base)}
 
             mapped_fields = []
             type_hints = get_type_hints(cls)
             for f in fields(cls):
                 # Skip internal fields
-                if f.name.startswith("__") or (not base_fields and f.name in base_field_names):
+                if f.name.startswith("__") or (not base_fields and (f.name, f.type) in base_fields_types):
                     continue
                 # Note fields() doesn't resolve forward refs
                 f.type = type_hints[f.name]

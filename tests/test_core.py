@@ -848,6 +848,49 @@ def test_property_serialisation_all_properties():
     assert Rectangle.json_schema() == expected_schema
 
 
+def test_inherited_field_narrowing():
+    @dataclass
+    class BaseObject(JsonSchemaMixin):
+        """Base"""
+        other: float
+        field: str
+
+    @dataclass
+    class NarrowedObject(BaseObject, JsonSchemaMixin):
+        """Narrowed"""
+        field: Literal['staticstr']
+
+    expected_schema = compose_schema({
+      "allOf": [
+        {
+          "$ref": "#/definitions/BaseObject"
+        },
+        {
+          "type": "object",
+          "required": ["field"],
+          "properties": {
+            "field": {"enum": ["staticstr"]}
+          }
+        }
+      ],
+      "description": "Narrowed",
+      "$schema": "http://json-schema.org/draft-06/schema#",
+      "definitions": {
+        "BaseObject": {
+          "type": "object",
+          "required": ["other", "field"],
+          "properties": {
+            "field": {"type": "string"},
+            "other": {"type": "number"}
+          },
+          "description": "Base"
+        }
+      }
+    })
+
+    assert NarrowedObject.json_schema() == expected_schema
+
+
 def test_unrecognized_enum_value():
     class PetType(Enum):
         CAT = "cat"
