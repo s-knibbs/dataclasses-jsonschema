@@ -231,6 +231,8 @@ class JsonSchemaMixin:
                 klass for klass in cls.__bases__ if is_dataclass(klass) and issubclass(klass, JsonSchemaMixin)
             ]
             if len(dataclass_bases) > 0:
+                if not allow_additional_props:
+                    raise TypeError("Dataclass inheritance and additional_props_false=False not currently supported")
                 base_discriminators = [
                     base._discriminator() for base in dataclass_bases if base._discriminator() is not None
                 ]
