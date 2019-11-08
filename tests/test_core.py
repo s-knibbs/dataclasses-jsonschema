@@ -4,16 +4,16 @@ from enum import Enum
 
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address
-from typing import List, NewType, Optional, Union, Set, Any
+from typing import List, NewType, Optional, Union, Set, Any, cast
 from typing_extensions import Final, Literal
 from uuid import UUID
 
-from dataclasses_jsonschema.type_defs import Nullable, NULL
+from dataclasses_jsonschema.type_defs import Nullable, NULL, JsonDict
 from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, \
     JsonSchemaMixin, Zoo, Baz
 import pytest
 
-from dataclasses_jsonschema import SchemaType, ValidationError, DecimalField, JsonSchemaMeta
+from dataclasses_jsonschema import SchemaType, ValidationError, DecimalField, JsonSchemaMeta, FieldEncoder
 
 FOO_SCHEMA = {
     'description': 'A foo that foos',
@@ -916,3 +916,26 @@ def test_inheritance_and_additional_properties_disallowed():
         @dataclass
         class Cat(Pet, allow_additional_props=False):
             hunting_skill: str
+
+
+def test_newtype_decoding():
+    StrippedString = NewType('StrippedString', str)
+
+    class StrippedStringField(FieldEncoder[StrippedString, str]):
+
+        def to_python(self, value: str) -> StrippedString:
+            return cast(StrippedString, value.strip())
+
+        @property
+        def json_schema(self) -> JsonDict:
+            return {'type': 'string'}
+
+    JsonSchemaMixin.register_field_encoders({StrippedString: StrippedStringField()})
+
+    @dataclass
+    class Pet(JsonSchemaMixin):
+        name: StrippedString
+        type: str
+
+    p = Pet.from_dict({'name': '  Fido ', 'type': 'dog'})
+    assert p.name == 'Fido'

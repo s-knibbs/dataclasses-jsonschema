@@ -430,13 +430,13 @@ class JsonSchemaMixin:
             elif field_type_name == "Tuple":
                 def decoder(f, ft, val):
                     return tuple(cls._decode_field(f, ft.__args__[idx], v) for idx, v in enumerate(val))
+            elif field_type in cls._field_encoders:
+                def decoder(_, ft, val): return cls._field_encoders[ft].to_python(val)
             elif hasattr(field_type, "__supertype__"):  # NewType field
                 def decoder(f, ft, val):
                     return cls._decode_field(f, ft.__supertype__, val)
             elif is_enum(field_type):
                 def decoder(_, ft, val): return ft(val)
-            elif field_type in cls._field_encoders:
-                def decoder(_, ft, val): return cls._field_encoders[ft].to_python(val)
             elif field_type == Any:
                 def decoder(_, __, val): return val
             if decoder is None:
