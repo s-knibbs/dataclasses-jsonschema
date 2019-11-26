@@ -398,7 +398,7 @@ class JsonSchemaMixin:
             # Replace any nested dictionaries with their targets
             field_type_name = cls._get_field_type_name(field_type)
             if cls._is_json_schema_subclass(field_type):
-                def decoder(_, ft, val): return ft.from_dict(val, validate=False)
+                def decoder(_, ft, val): return ft.from_dict(val)
             elif is_nullable(field_type):
                 def decoder(f, ft, val): return cls._decode_field(f, unwrap_nullable(ft), val)
             elif is_optional(field_type):
@@ -412,7 +412,7 @@ class JsonSchemaMixin:
                     try:
                         decoded = cls._decode_field(field, variant, value)
                         break
-                    except (AttributeError, TypeError, ValueError):
+                    except (AttributeError, TypeError, ValueError, ValidationError):
                         continue
                 if decoded is not None:
                     return decoded
