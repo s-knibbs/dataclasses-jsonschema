@@ -151,6 +151,30 @@ BAZ_SCHEMA = {
     'properties': {'a': {'$ref': '#/definitions/Point', 'default': {'z': 0.0, 'y': 0.0}}},
     'type': 'object'
 }
+BOX_SCHEMA = {
+    'description': 'A box.',
+    'properties': {
+        'depth': {
+            'minimum': 3,
+            'type': 'integer'
+        },
+        'height': {
+            'minimum': 2,
+            'type': 'integer'
+        },
+        'width': {
+            'minimum': 1,
+            'type': 'integer'
+        }
+    },
+    'required': [
+        'width',
+        'height',
+        'depth'
+    ],
+    'type': 'object'
+}
+
 
 
 def compose_schema(schema, definitions=None):
@@ -190,7 +214,8 @@ def test_embeddable_json_schema():
         'ShoppingCart': SHOPPING_CART_SCHEMA,
         'OpaqueData': OPAQUE_DATA_SCHEMA,
         'Zoo': ZOO_SCHEMA,
-        'Baz': BAZ_SCHEMA
+        'Baz': BAZ_SCHEMA,
+        'Box': BOX_SCHEMA,
     }
     assert expected == JsonSchemaMixin.all_json_schemas()
     with pytest.warns(DeprecationWarning):

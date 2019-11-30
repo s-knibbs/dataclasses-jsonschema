@@ -162,16 +162,19 @@ class FieldMeta:
     read_only: Optional[bool] = None
     write_only: Optional[bool] = None
     extensions: Optional[Dict[str, Any]] = None
+    schema: Optional[Dict[str, Any]] = None
 
     @property
     def as_dict(self) -> Dict:
         schema_dict = {
             _to_camel_case(k): v
             for k, v in asdict(self).items()
-            if v is not None and k not in ["schema_type", "extensions"]
+            if v is not None and k not in ["schema_type", "extensions", "schema"]
         }
         if (self.schema_type in [SchemaType.SWAGGER_V2, SchemaType.OPENAPI_3]) and self.extensions is not None:
             schema_dict.update({'x-' + k: v for k, v in self.extensions.items()})
+        if self.schema is not None:
+            schema_dict.update(self.schema)
         # Swagger 2 only supports a single example value per property
         if "examples" in schema_dict and len(schema_dict["examples"]) > 0 and self.schema_type == SchemaType.SWAGGER_V2:
             schema_dict["example"] = schema_dict["examples"][0]
@@ -565,6 +568,8 @@ class JsonSchemaMixin:
                 ]
             if "extensions" in field.metadata:
                 field_meta.extensions = field.metadata["extensions"]
+            if "schema" in field.metadata:
+                field_meta.schema = field.metadata["schema"]
             if "description" in field.metadata:
                 field_meta.description = field.metadata["description"]
             if "title" in field.metadata:

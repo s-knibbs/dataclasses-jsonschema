@@ -107,3 +107,10 @@ class ProductList(JsonSchemaMixin):
 class Zoo(JsonSchemaMixin):
     """A zoo"""
     animal_types: Optional[Dict[str, str]] = field(default_factory=dict)
+
+@dataclass
+class Box(JsonSchemaMixin):
+    """A box."""
+    width: int = field(metadata={"schema": {"minimum": 1}})
+    height: int = field(metadata={"schema": {"minimum": 2}})
+    depth: int = field(metadata={"schema": {"minimum": 3}})
