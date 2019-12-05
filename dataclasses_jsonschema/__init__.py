@@ -6,7 +6,7 @@ from _decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
 from typing import Optional, Type, Union, Any, Dict, Tuple, List, TypeVar, get_type_hints, Callable
 import re
-from datetime import datetime
+from datetime import datetime, date
 from dataclasses import fields, is_dataclass, Field, MISSING, dataclass, asdict
 from uuid import UUID
 from enum import Enum
@@ -16,7 +16,7 @@ from typing_extensions import Final, Literal
 
 
 from dataclasses_jsonschema.field_types import (  # noqa: F401
-    FieldEncoder, DateTimeFieldEncoder, UuidField, DecimalField,
+    FieldEncoder, DateFieldEncoder, DateTimeFieldEncoder, UuidField, DecimalField,
     IPv4AddressField, IPv6AddressField, DateTimeField
 )
 from dataclasses_jsonschema.type_defs import JsonDict, SchemaType, JsonSchemaMeta, _NULL_TYPE, NULL  # noqa: F401
@@ -184,6 +184,7 @@ class JsonSchemaMixin:
     convert to and from JSON encodable dicts with validation against the schema
     """
     _field_encoders: Dict[Type, FieldEncoder] = {
+        date: DateFieldEncoder(),
         datetime: DateTimeFieldEncoder(),
         UUID: UuidField(),
         Decimal: DecimalField(),
