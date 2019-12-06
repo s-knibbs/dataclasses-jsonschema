@@ -764,6 +764,7 @@ class JsonSchemaMixin:
                     schema_options.schema_type == SchemaType.OPENAPI_3 and \
                     not cls.__discriminator_inherited:
                 schema['discriminator'] = {'propertyName': cls.__discriminator_name}
+                properties[cls.__discriminator_name] = {"type": "string"}
                 required.append(cls.__discriminator_name)
 
             # Needed for Draft 04 backwards compatibility
