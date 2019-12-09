@@ -1,5 +1,5 @@
 import warnings
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
 from typing import cast, TypeVar, Generic, Optional
@@ -25,6 +25,20 @@ class FieldEncoder(Generic[T, OutType]):
     @property
     def json_schema(self) -> JsonDict:
         raise NotImplementedError()
+
+
+class DateFieldEncoder(FieldEncoder[date, str]):
+    """Encodes dates to RFC3339 format"""
+
+    def to_wire(self, value: date) -> str:
+        return value.isoformat()
+
+    def to_python(self, value: str) -> date:
+        return value if isinstance(value, date) else parse(cast(str, value)).date()
+
+    @property
+    def json_schema(self) -> JsonDict:
+        return {"type": "string", "format": "date"}
 
 
 class DateTimeFieldEncoder(FieldEncoder[datetime, str]):
