@@ -34,7 +34,7 @@ class DateFieldEncoder(FieldEncoder[date, str]):
         return value.isoformat()
 
     def to_python(self, value: str) -> date:
-        return value if isinstance(value, date) else date.fromisoformat(cast(str, value))
+        return value if isinstance(value, date) else parse(cast(str, value)).date()
 
     @property
     def json_schema(self) -> JsonDict:
