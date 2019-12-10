@@ -703,7 +703,10 @@ def test_discriminators():
         "Pet": {
             "description": "A generic pet",
             "type": "object",
-            "properties": {"name": {"type": "string"}},
+            "properties": {
+                "PetType": {"type": "string"},
+                "name": {"type": "string"}
+            },
             "required": ["name", "PetType"],
             "discriminator": {"propertyName": "PetType"}
         }
