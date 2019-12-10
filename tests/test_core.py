@@ -904,6 +904,9 @@ def test_unrecognized_enum_value():
     p = Pet.from_dict({'name': 'snakey', 'type': 'python'}, validate_enums=False)
     assert p.type == "python"
 
+    with pytest.warns(UserWarning):
+        assert p.to_dict() == {'name': 'snakey', 'type': 'python'}
+
 
 def test_inheritance_and_additional_properties_disallowed():
     @dataclass

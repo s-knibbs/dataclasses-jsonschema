@@ -51,6 +51,10 @@ class ValidationError(Exception):
     pass
 
 
+class UnknownEnumValueError(ValueError):
+    pass
+
+
 def is_enum(field_type: Any):
     return issubclass_safe(field_type, Enum)
 
@@ -284,7 +288,11 @@ class JsonSchemaMixin:
             elif is_final(field_type):
                 def encoder(ft, val, o): return cls._encode_field(unwrap_final(ft), val, o)
             elif is_enum(field_type):
-                def encoder(_, v, __): return v.value
+                def encoder(_, v, __):
+                    try:
+                        return v.value
+                    except AttributeError as e:
+                        raise UnknownEnumValueError(f'Unknown enum value: {v}') from e
             elif field_type_name == 'Union':
                 # Attempt to encode the field with each union variant.
                 # TODO: Find a more reliable method than this since in the case 'Union[List[str], Dict[str, int]]' this
@@ -294,7 +302,7 @@ class JsonSchemaMixin:
                     try:
                         encoded = cls._encode_field(variant, value, omit_none)
                         break
-                    except (TypeError, AttributeError):
+                    except (TypeError, AttributeError, UnknownEnumValueError):
                         continue
                 if encoded is None:
                     raise TypeError("No variant of '{}' matched the type '{}'".format(field_type, type(value)))
@@ -371,7 +379,12 @@ class JsonSchemaMixin:
         """
         data = {}
         for f in self._get_fields():
-            value = self._encode_field(f.field.type, getattr(self, f.field.name), omit_none)
+            value = getattr(self, f.field.name)
+            try:
+                value = self._encode_field(f.field.type, value, omit_none)
+            except UnknownEnumValueError as e:
+                warnings.warn(str(e))
+
             if omit_none and value is None:
                 continue
             if value is NULL:
