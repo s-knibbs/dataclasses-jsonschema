@@ -30,6 +30,11 @@ def random_pet():
     ---
     get:
       description: Get a random pet
+      parameters:
+        - in: header
+          name: random-header
+          schema:
+            type: string
       responses:
         200:
           content:
@@ -44,6 +49,13 @@ EXPECTED_API_SPEC = {
         "/random": {
             "get": {
                 "description": "Get a random pet",
+                "parameters": [{
+                    "in": "header",
+                    "name": "random-header",
+                    "schema": {
+                        "type": "string"
+                    }
+                }],
                 "responses": {
                     "200": {
                         "content": {

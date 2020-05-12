@@ -25,7 +25,7 @@ class DataclassesPlugin(BasePlugin):
 
     def resolve_schema_refs(self, data):
         if "schema" in data:
-            data["schema"] = {"$ref": _schema_reference(data["schema"], self._schema_type)}
+            data["schema"] = self.spec.get_ref('schema', data["schema"])
         else:
             for key in data:
                 if isinstance(data[key], dict):
