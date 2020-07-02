@@ -34,7 +34,26 @@ def random_pet():
         200:
           content:
             application/json:
-              schema: Pet
+              schema:
+                $ref: Pet
+    """
+    pass
+
+
+@app.route("/all")
+def all_pets():
+    """A cute furry animal endpoint.
+    ---
+    get:
+      description: Get all pets
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: Pet
     """
     pass
 
@@ -50,6 +69,25 @@ EXPECTED_API_SPEC = {
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/Pet"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/all": {
+            "get": {
+                "description": "Get all pets",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Pet"
+                                    }
                                 }
                             }
                         }
@@ -165,6 +203,7 @@ def test_api_spec_schema():
     spec.components.schema("Dog", schema=Dog)
     with app.test_request_context():
         spec.path(view=random_pet)
+        spec.path(view=all_pets)
     spec_json = json.dumps(spec.to_dict(), indent=2)
     spec_dict = json.loads(spec_json)
     assert spec_dict["paths"] == EXPECTED_API_SPEC["paths"]

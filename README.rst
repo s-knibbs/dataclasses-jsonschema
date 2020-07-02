@@ -199,7 +199,8 @@ OpenAPI & Swagger specs can be generated using the apispec plugin:
             200:
               content:
                 application/json:
-                  schema: Pet
+                  schema:
+                    $ref: Pet
         """
         pet = get_random_pet()
         return jsonify(pet.to_dict())
