@@ -498,7 +498,8 @@ class JsonSchemaMixin:
                 try:
                     values[f.field.name] = cls._decode_field(f.field.name, f.field.type, data.get(f.mapped_name))
                 except ValueError:
-                    if is_enum(f.field.type):
+                    ftype = unwrap_optional(f.field.type) if is_optional(f.field.type) else f.field.type
+                    if is_enum(ftype):
                         values[f.field.name] = data.get(f.mapped_name)
                     else:
                         raise
@@ -586,7 +587,7 @@ class JsonSchemaMixin:
             if schema_type == SchemaType.OPENAPI_3:
                 field_meta.read_only = field.metadata.get("read_only")
                 if field_meta.read_only and default_value is MISSING:
-                    warnings.warn(f"Read-only fields should have a default value")
+                    warnings.warn("Read-only fields should have a default value")
                 field_meta.write_only = field.metadata.get("write_only")
         return field_meta, required
 
