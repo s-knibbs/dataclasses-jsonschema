@@ -899,16 +899,22 @@ def test_unrecognized_enum_value():
         CAT = "cat"
         DOG = "dog"
 
+    class FoodType(Enum):
+        KIBBLE = "kibble"
+        FRESH = "fresh"
+
     @dataclass
     class Pet(JsonSchemaMixin):
         name: str
         type: PetType
+        favourite_food: Optional[FoodType] = None
 
-    p = Pet.from_dict({'name': 'snakey', 'type': 'python'}, validate_enums=False)
+    p = Pet.from_dict({'name': 'snakey', 'type': 'python', 'favourite_food': 'mice'}, validate_enums=False)
     assert p.type == "python"
+    assert p.favourite_food == "mice"
 
     with pytest.warns(UserWarning):
-        assert p.to_dict() == {'name': 'snakey', 'type': 'python'}
+        assert p.to_dict() == {'name': 'snakey', 'type': 'python', 'favourite_food': 'mice'}
 
 
 def test_inheritance_and_additional_properties_disallowed():
