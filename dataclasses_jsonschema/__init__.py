@@ -12,7 +12,10 @@ from uuid import UUID
 from enum import Enum
 import warnings
 
-from typing_extensions import Final, Literal
+try:
+    from typing_extensions import Final, Literal
+except ModuleNotFoundError:
+    from typing import Final, Literal
 
 
 from dataclasses_jsonschema.field_types import (  # noqa: F401

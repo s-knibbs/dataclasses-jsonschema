@@ -4,7 +4,7 @@ requires = [
     'python-dateutil',
     'jsonschema',
     'mypy_extensions',
-    'typing_extensions',
+    'typing_extensions;python_version<"3.8"',
     'dataclasses;python_version<"3.7"'
 ]
 
