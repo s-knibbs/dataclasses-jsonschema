@@ -13,9 +13,9 @@ from enum import Enum
 import warnings
 
 try:
-    from typing_extensions import Final, Literal
-except ModuleNotFoundError:
-    from typing import Final, Literal
+    from typing import Final, Literal  # type: ignore
+except ImportError:
+    from typing_extensions import Final, Literal  # type: ignore
 
 
 from dataclasses_jsonschema.field_types import (  # noqa: F401
