@@ -687,7 +687,9 @@ class JsonSchemaMixin:
     def _get_field_definitions(cls, field_type: Any, definitions: JsonDict,
                                schema_options: SchemaOptions):
         field_type_name = cls._get_field_type_name(field_type)
-        if is_optional(field_type) or field_type_name in ('Sequence', 'List', 'Tuple'):
+        if is_optional(field_type):
+            cls._get_field_definitions(unwrap_optional(field_type), definitions, schema_options)
+        elif field_type_name in ('Sequence', 'List', 'Tuple'):
             cls._get_field_definitions(field_type.__args__[0], definitions, schema_options)
         elif field_type_name in ('Dict', 'Mapping'):
             cls._get_field_definitions(field_type.__args__[1], definitions, schema_options)
