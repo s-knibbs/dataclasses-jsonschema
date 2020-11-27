@@ -2,7 +2,7 @@ import inspect
 import json
 import sys
 import functools
-from _decimal import Decimal
+from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
 from typing import Optional, Type, Union, Any, Dict, Tuple, List, TypeVar, get_type_hints, Callable
 import re
