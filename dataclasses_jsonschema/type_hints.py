@@ -2,7 +2,7 @@ import ast
 import sys
 
 try:
-    from typing import ForwardRef
+    from typing import ForwardRef  # type: ignore
 except ImportError:
     # Python 3.6
     from typing import _ForwardRef as ForwardRef  # type: ignore
