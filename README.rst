@@ -1,8 +1,8 @@
 Dataclasses JSON Schema
 =======================
 
-.. image:: https://travis-ci.org/s-knibbs/dataclasses-jsonschema.svg?branch=master
-    :target: https://travis-ci.org/s-knibbs/dataclasses-jsonschema
+.. image:: https://github.com/s-knibbs/dataclasses-jsonschema/workflows/Tox%20tests/badge.svg?branch=master
+    :target: https://github.com/s-knibbs/dataclasses-jsonschema/actions
 
 .. image:: https://badge.fury.io/py/dataclasses-jsonschema.svg
     :target: https://badge.fury.io/py/dataclasses-jsonschema
