@@ -4,7 +4,7 @@ import sys
 import functools
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
-from typing import Optional, Type, Union, Any, Dict, Tuple, List, TypeVar, get_type_hints, Callable
+from typing import Optional, Type, Union, Any, Dict, Tuple, List, Callable, TypeVar
 import re
 from datetime import datetime, date
 from dataclasses import fields, is_dataclass, Field, MISSING, dataclass, asdict
@@ -18,11 +18,12 @@ except ImportError:
     from typing_extensions import Final, Literal  # type: ignore
 
 
-from dataclasses_jsonschema.field_types import (  # noqa: F401
+from .field_types import (  # noqa: F401
     FieldEncoder, DateFieldEncoder, DateTimeFieldEncoder, UuidField, DecimalField,
-    IPv4AddressField, IPv6AddressField, DateTimeField
+    IPv4AddressField, IPv6AddressField, DateTimeField, UUID_REGEX
 )
-from dataclasses_jsonschema.type_defs import JsonDict, SchemaType, JsonSchemaMeta, _NULL_TYPE, NULL  # noqa: F401
+from .type_defs import JsonDict, SchemaType, JsonSchemaMeta, _NULL_TYPE, NULL  # noqa: F401
+from .type_hints import get_class_type_hints
 
 try:
     import fastjsonschema
@@ -344,7 +345,7 @@ class JsonSchemaMixin:
                 base_fields_types |= {(f.name, f.type) for f in fields(base)}
 
             mapped_fields = []
-            type_hints = get_type_hints(cls)
+            type_hints = get_class_type_hints(cls)
             for f in fields(cls):
                 # Skip internal fields
                 if f.name.startswith("__") or (not base_fields and (f.name, f.type) in base_fields_types):
@@ -469,7 +470,9 @@ class JsonSchemaMixin:
                 # TODO: Support validating with other schema types
                 schema_validator = cls.__compiled_schema.get(SchemaOptions(DEFAULT_SCHEMA_TYPE, validate_enums))
                 if schema_validator is None:
-                    schema_validator = fastjsonschema.compile(cls.json_schema(validate_enums=validate_enums))
+                    schema_validator = fastjsonschema.compile(
+                        cls.json_schema(validate_enums=validate_enums), formats={'uuid': UUID_REGEX}
+                    )
                     cls.__compiled_schema[SchemaOptions(DEFAULT_SCHEMA_TYPE, validate_enums)] = schema_validator
                 schema_validator(data)
             else:
@@ -758,7 +761,7 @@ class JsonSchemaMixin:
         else:
             definitions = cls.__definitions[schema_options]
 
-        if cls.__schema is not None and schema_options in cls.__schema:
+        if schema_options in cls.__schema:
             schema = cls.__schema[schema_options]
         else:
             properties = {}

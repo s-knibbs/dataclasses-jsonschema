@@ -63,6 +63,7 @@ class DateTimeFieldEncoder(FieldEncoder[datetime, str]):
 
 # Alias for backwards compat
 DateTimeField = DateTimeFieldEncoder
+UUID_REGEX = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 
 
 class UuidField(FieldEncoder[UUID, str]):
@@ -78,7 +79,7 @@ class UuidField(FieldEncoder[UUID, str]):
         return {
             'type': 'string',
             'format': 'uuid',
-            'pattern': '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            'pattern': UUID_REGEX
         }
 
 

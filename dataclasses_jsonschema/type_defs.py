@@ -5,14 +5,15 @@ try:
     # Supported in future python versions
     from typing import TypedDict  # type: ignore
 except ImportError:
-    from mypy_extensions import TypedDict
+    from typing_extensions import TypedDict
 
 
 JsonEncodable = Union[int, float, str, bool]
 JsonDict = Dict[str, Any]
 
 
-class JsonSchemaMeta(TypedDict):
+# This issue still seems to be present for python < 3.8: https://github.com/python/mypy/issues/7722
+class JsonSchemaMeta(TypedDict, total=False):  # type: ignore
     """JSON schema field definitions. Example usage:
 
     >>> foo = field(metadata=JsonSchemaMeta(description="A foo that foos"))
