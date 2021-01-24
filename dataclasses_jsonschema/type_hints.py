@@ -1,7 +1,13 @@
 import ast
 import sys
 
-from typing import Type, Dict, Any, ForwardRef, Union, Tuple, Set, List
+try:
+    from typing import ForwardRef
+except ImportError:
+    # Python 3.6
+    from typing import _ForwardRef as ForwardRef  # type: ignore
+
+from typing import Type, Dict, Any, Union, Tuple, Set, List
 from typing import _eval_type  # type: ignore
 
 
