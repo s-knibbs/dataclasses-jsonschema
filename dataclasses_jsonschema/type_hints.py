@@ -23,7 +23,7 @@ class RewriteUnionTypes(ast.NodeTransformer):
         if isinstance(node.op, ast.BitOr):
             self.rewritten = True
             return ast.Subscript(
-                value=ast.Name(id='Union', ctx=ast.Load(), lineno=1, col_offset=1),
+                value=ast.Name(id='_Union', ctx=ast.Load(), lineno=1, col_offset=1),
                 slice=ast.Index(
                     value=ast.Tuple(elts=list(get_elts(node)), ctx=ast.Load(), lineno=1, col_offset=1),
                     ctx=ast.Load(),
@@ -61,11 +61,11 @@ class RewriteBuiltinGenerics(ast.NodeTransformer):
 
 
 def get_class_type_hints(klass: Type, localns=None) -> Dict[str, Any]:
-    """Return type hints for a class. Adapted """
+    """Return type hints for a class. Adapted from `typing.get_type_hints`, adds support for PEP 585 & PEP 604"""
     hints = {}
     for base in reversed(klass.__mro__):
         base_globals = sys.modules[base.__module__].__dict__
-        base_globals['Union'] = Union
+        base_globals['_Union'] = Union
         if sys.version_info < (3, 9):
             base_globals['_List'] = List
             base_globals['_Set'] = Set
