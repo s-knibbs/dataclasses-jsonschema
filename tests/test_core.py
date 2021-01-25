@@ -951,3 +951,18 @@ def test_newtype_decoding():
 
     p = Pet.from_dict({'name': '  Fido ', 'type': 'dog'})
     assert p.name == 'Fido'
+
+
+def test_module_name_extension():
+    class PetType(Enum):
+        DOG = "dog"
+        CAT = "cat"
+
+    @dataclass
+    class Pet(JsonSchemaMixin):
+        name: str
+        type: PetType
+
+    schema = Pet.json_schema(embeddable=True, schema_type=SchemaType.OPENAPI_3)
+    assert schema['Pet']['x-module-name'] == 'tests.test_core'
+    assert schema['Pet']['properties']['type']['x-module-name'] == 'tests.test_core'

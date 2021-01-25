@@ -645,6 +645,7 @@ class JsonSchemaMixin:
                     # Note: Unlike swagger, JSON schema does not support extensions
                     if schema_options.schema_type in (SchemaType.SWAGGER_V2, SchemaType.SWAGGER_V3):
                         field_schema['x-enum-name'] = field_type_name
+                        field_schema['x-module-name'] = field_type.__module__
             elif field_type_name == 'Union':
                 if schema_options.schema_type == SchemaType.SWAGGER_V2:
                     raise TypeError('Type unions unsupported in Swagger 2.0')
@@ -776,6 +777,9 @@ class JsonSchemaMixin:
                 'required': required,
                 'properties': properties
             }
+
+            if schema_options.schema_type == SchemaType.OPENAPI_3:
+                schema['x-module-name'] = cls.__module__
 
             if not cls.__allow_additional_props:
                 schema["additionalProperties"] = False
