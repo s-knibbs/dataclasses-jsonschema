@@ -1,5 +1,6 @@
 import datetime
 from _decimal import Decimal
+from copy import deepcopy
 from enum import Enum
 
 from dataclasses import dataclass, field
@@ -178,7 +179,13 @@ def test_embeddable_json_schema():
     assert expected == Foo.json_schema(embeddable=True)
     expected = {'Point': POINT_SCHEMA, 'Foo': SWAGGER_V2_FOO_SCHEMA}
     assert expected == SubSchemas.all_json_schemas(schema_type=SchemaType.SWAGGER_V2)
-    expected = {'Point': POINT_SCHEMA, 'Foo': SWAGGER_V3_FOO_SCHEMA}
+    expected = {
+        'Point': deepcopy(POINT_SCHEMA),
+        'Foo': deepcopy(SWAGGER_V3_FOO_SCHEMA),
+    }
+    expected['Point']['x-module-name'] = 'tests.conftest'
+    expected['Foo']['x-module-name'] = 'tests.conftest'
+    expected['Foo']['properties']['d']['x-module-name'] = 'tests.conftest'
     assert expected == SubSchemas.all_json_schemas(schema_type=SchemaType.SWAGGER_V3)
     expected = {
         'Point': POINT_SCHEMA,
@@ -441,9 +448,11 @@ def test_field_metadata():
     expected_full_schema = compose_schema(expected_schema)
     assert Test.json_schema() == expected_full_schema
     expected_schema['properties']['name']['x-field-group'] = 1
+    expected_schema['x-module-name'] = 'tests.test_core'
     assert Test.json_schema(schema_type=SchemaType.OPENAPI_3, embeddable=True) == {'Test': expected_schema}
     expected_schema['properties']['name']['example'] = 'foo'
     del expected_schema['properties']['name']['examples']
+    del expected_schema['x-module-name']
     assert Test.json_schema(schema_type=SchemaType.SWAGGER_V2, embeddable=True) == {'Test': expected_schema}
 
 
@@ -632,7 +641,8 @@ def test_nullable_field():
             "name": {"type": "string"},
             "manager": {"type": "string", "nullable": True}
         },
-        "required": ["name"]
+        "required": ["name"],
+        "x-module-name": "tests.test_core"
     }
     expected_json_schema = compose_schema({
         "type": "object",
@@ -696,7 +706,8 @@ def test_discriminators():
                 {
                     "type": "object",
                     "properties": {"breed": {"type": "string"}},
-                    "required": ["breed"]
+                    "required": ["breed"],
+                    "x-module-name": "tests.test_core",
                 },
             ]
         },
@@ -708,7 +719,8 @@ def test_discriminators():
                 "name": {"type": "string"}
             },
             "required": ["name", "PetType"],
-            "discriminator": {"propertyName": "PetType"}
+            "discriminator": {"propertyName": "PetType"},
+            "x-module-name": "tests.test_core",
         }
     }
 

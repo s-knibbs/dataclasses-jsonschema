@@ -67,6 +67,7 @@ EXPECTED_API_SPEC = {
     "components": {
         "schemas": {
             "Category": {
+                "x-module-name": "tests.test_apispec_plugin",
                 "description": "Pet category",
                 "type": "object",
                 "properties": {
@@ -82,6 +83,7 @@ EXPECTED_API_SPEC = {
                 ]
             },
             "Pet": {
+                "x-module-name": "tests.test_apispec_plugin",
                 "description": "A pet",
                 "type": "object",
                 "properties": {
@@ -109,7 +111,8 @@ EXPECTED_API_SPEC = {
                         ],
                         "properties": {
                             "colour": {"type": "string"}
-                        }
+                        },
+                        "x-module-name": "tests.test_apispec_plugin"
                     }
                 ],
                 "description": "A cat"
@@ -126,7 +129,8 @@ EXPECTED_API_SPEC = {
                         ],
                         "properties": {
                             "favourite_food": {"type": "string"}
-                        }
+                        },
+                        "x-module-name": "tests.test_apispec_plugin"
                     }
                 ],
                 "description": "A dog"
