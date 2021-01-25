@@ -4,7 +4,7 @@ import sys
 import functools
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
-from typing import Optional, Type, Union, Any, Dict, Tuple, List, TypeVar, get_type_hints, Callable
+from typing import Optional, Type, Union, Any, Dict, Tuple, List, Callable, TypeVar
 import re
 from datetime import datetime, date
 from dataclasses import fields, is_dataclass, Field, MISSING, dataclass, asdict
@@ -18,11 +18,12 @@ except ImportError:
     from typing_extensions import Final, Literal  # type: ignore
 
 
-from dataclasses_jsonschema.field_types import (  # noqa: F401
+from .field_types import (  # noqa: F401
     FieldEncoder, DateFieldEncoder, DateTimeFieldEncoder, UuidField, DecimalField,
-    IPv4AddressField, IPv6AddressField, DateTimeField
+    IPv4AddressField, IPv6AddressField, DateTimeField, UUID_REGEX
 )
-from dataclasses_jsonschema.type_defs import JsonDict, SchemaType, JsonSchemaMeta, _NULL_TYPE, NULL  # noqa: F401
+from .type_defs import JsonDict, SchemaType, JsonSchemaMeta, _NULL_TYPE, NULL  # noqa: F401
+from .type_hints import get_class_type_hints
 
 try:
     import fastjsonschema
@@ -46,8 +47,12 @@ JSON_ENCODABLE_TYPES = {
 SEQUENCE_TYPES = {
     'Sequence': list,
     'List': list,
-    'Set': set
+    'Set': set,
+    'set': set,
+    'list': list
 }
+MAPPING_TYPES = ('Dict', 'Mapping', 'dict')
+TUPLE_TYPES = ('Tuple', 'tuple')
 
 
 class ValidationError(Exception):
@@ -310,15 +315,15 @@ class JsonSchemaMixin:
                 if encoded is None:
                     raise TypeError("No variant of '{}' matched the type '{}'".format(field_type, type(value)))
                 return encoded
-            elif field_type_name in ('Mapping', 'Dict'):
+            elif field_type_name in MAPPING_TYPES:
                 def encoder(ft, val, o):
                     return {
                         cls._encode_field(ft.__args__[0], k, o): cls._encode_field(ft.__args__[1], v, o)
                         for k, v in val.items()
                     }
-            elif field_type_name in SEQUENCE_TYPES or (field_type_name == "Tuple" and ... in field_type.__args__):
+            elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_type.__args__):
                 def encoder(ft, val, o): return [cls._encode_field(ft.__args__[0], v, o) for v in val]
-            elif field_type_name == 'Tuple':
+            elif field_type_name in TUPLE_TYPES:
                 def encoder(ft, val, o):
                     return [cls._encode_field(ft.__args__[idx], v, o) for idx, v in enumerate(val)]
             elif cls._is_json_schema_subclass(field_type):
@@ -344,7 +349,7 @@ class JsonSchemaMixin:
                 base_fields_types |= {(f.name, f.type) for f in fields(base)}
 
             mapped_fields = []
-            type_hints = get_type_hints(cls)
+            type_hints = get_class_type_hints(cls)
             for f in fields(cls):
                 # Skip internal fields
                 if f.name.startswith("__") or (not base_fields and (f.name, f.type) in base_fields_types):
@@ -433,18 +438,18 @@ class JsonSchemaMixin:
                         continue
                 if decoded is not None:
                     return decoded
-            elif field_type_name in ('Mapping', 'Dict'):
+            elif field_type_name in MAPPING_TYPES:
                 def decoder(f, ft, val):
                     return {
                         cls._decode_field(f, ft.__args__[0], k): cls._decode_field(f, ft.__args__[1], v)
                         for k, v in val.items()
                     }
-            elif field_type_name in SEQUENCE_TYPES or (field_type_name == "Tuple" and ... in field_type.__args__):
-                seq_type = tuple if field_type_name == "Tuple" else SEQUENCE_TYPES[field_type_name]
+            elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_type.__args__):
+                seq_type = tuple if field_type_name in TUPLE_TYPES else SEQUENCE_TYPES[field_type_name]
 
                 def decoder(f, ft, val):
                     return seq_type(cls._decode_field(f, ft.__args__[0], v) for v in val)
-            elif field_type_name == "Tuple":
+            elif field_type_name in TUPLE_TYPES:
                 def decoder(f, ft, val):
                     return tuple(cls._decode_field(f, ft.__args__[idx], v) for idx, v in enumerate(val))
             elif field_type in cls._field_encoders:
@@ -469,7 +474,9 @@ class JsonSchemaMixin:
                 # TODO: Support validating with other schema types
                 schema_validator = cls.__compiled_schema.get(SchemaOptions(DEFAULT_SCHEMA_TYPE, validate_enums))
                 if schema_validator is None:
-                    schema_validator = fastjsonschema.compile(cls.json_schema(validate_enums=validate_enums))
+                    schema_validator = fastjsonschema.compile(
+                        cls.json_schema(validate_enums=validate_enums), formats={'uuid': UUID_REGEX}
+                    )
                     cls.__compiled_schema[SchemaOptions(DEFAULT_SCHEMA_TYPE, validate_enums)] = schema_validator
                 schema_validator(data)
             else:
@@ -545,7 +552,7 @@ class JsonSchemaMixin:
                 values[f.field.name] = ft.from_object(from_value, exclude=sub_exclude)
             elif is_enum(ft):
                 values[f.field.name] = ft(from_value)
-            elif field_type_name == "List" and cls._is_json_schema_subclass(ft.__args__[0]):
+            elif field_type_name in ("List", "list") and cls._is_json_schema_subclass(ft.__args__[0]):
                 values[f.field.name] = [
                     ft.__args__[0].from_object(v, exclude=sub_exclude) for v in from_value
                 ]
@@ -653,19 +660,19 @@ class JsonSchemaMixin:
                 field_schema = {
                     'oneOf': [cls._get_field_schema(variant, schema_options)[0] for variant in field_type.__args__]
                 }
-            elif field_type_name in ('Dict', 'Mapping'):
+            elif field_type_name in MAPPING_TYPES:
                 field_schema = {'type': 'object'}
                 if field_type.__args__[1] is not Any:
                     field_schema['additionalProperties'] = cls._get_field_schema(
                         field_type.__args__[1], schema_options
                     )[0]
-            elif field_type_name in SEQUENCE_TYPES or (field_type_name == "Tuple" and ... in field_type.__args__):
+            elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_type.__args__):
                 field_schema = {'type': 'array'}
                 if field_type.__args__[0] is not Any:
                     field_schema['items'] = cls._get_field_schema(field_type.__args__[0], schema_options)[0]
-                if field_type_name == "Set":
+                if field_type_name in ("Set", "set"):
                     field_schema['uniqueItems'] = True
-            elif field_type_name == "Tuple":
+            elif field_type_name in TUPLE_TYPES:
                 tuple_len = len(field_type.__args__)
                 # TODO: How do we handle Optional type within lists / tuples
                 field_schema = {
@@ -691,9 +698,9 @@ class JsonSchemaMixin:
         field_type_name = cls._get_field_type_name(field_type)
         if is_optional(field_type):
             cls._get_field_definitions(unwrap_optional(field_type), definitions, schema_options)
-        elif field_type_name in ('Sequence', 'List', 'Tuple'):
+        elif field_type_name in SEQUENCE_TYPES:
             cls._get_field_definitions(field_type.__args__[0], definitions, schema_options)
-        elif field_type_name in ('Dict', 'Mapping'):
+        elif field_type_name in MAPPING_TYPES:
             cls._get_field_definitions(field_type.__args__[1], definitions, schema_options)
         elif field_type_name == 'Union':
             for variant in field_type.__args__:
@@ -760,7 +767,7 @@ class JsonSchemaMixin:
         else:
             definitions = cls.__definitions[schema_options]
 
-        if cls.__schema is not None and schema_options in cls.__schema:
+        if schema_options in cls.__schema:
             schema = cls.__schema[schema_options]
         else:
             properties = {}

@@ -3,7 +3,6 @@ from setuptools import setup
 requires = [
     'python-dateutil',
     'jsonschema',
-    'mypy_extensions',
     'typing_extensions;python_version<"3.8"',
     'dataclasses;python_version<"3.7"'
 ]
@@ -24,7 +23,7 @@ setup(
     url='https://github.com/s-knibbs/dataclasses-jsonschema',
     install_requires=requires,
     extras_require={
-        'fast-validation': ["fastjsonschema==2.13"],
+        'fast-validation': ["fastjsonschema"],
         'apispec': ["apispec"]
     },
     setup_requires=['pytest-runner', 'setuptools_scm'],
