@@ -20,7 +20,7 @@ except ImportError:
 
 from .field_types import (  # noqa: F401
     FieldEncoder, DateFieldEncoder, DateTimeFieldEncoder, UuidField, DecimalField,
-    IPv4AddressField, IPv6AddressField, DateTimeField, UUID_REGEX
+    IPv4AddressField, IPv6AddressField, DateTimeField
 )
 from .type_defs import JsonDict, SchemaType, JsonSchemaMeta, _NULL_TYPE, NULL  # noqa: F401
 from .type_hints import get_class_type_hints
@@ -474,8 +474,14 @@ class JsonSchemaMixin:
                 # TODO: Support validating with other schema types
                 schema_validator = cls.__compiled_schema.get(SchemaOptions(DEFAULT_SCHEMA_TYPE, validate_enums))
                 if schema_validator is None:
+                    formats = {}
+                    for encoder in cls._field_encoders.values():
+                        schema = encoder.json_schema
+                        if 'pattern' in schema and 'format' in schema:
+                            formats[schema['format']] = schema['pattern']
+
                     schema_validator = fastjsonschema.compile(
-                        cls.json_schema(validate_enums=validate_enums), formats={'uuid': UUID_REGEX}
+                        cls.json_schema(validate_enums=validate_enums), formats=formats
                     )
                     cls.__compiled_schema[SchemaOptions(DEFAULT_SCHEMA_TYPE, validate_enums)] = schema_validator
                 schema_validator(data)

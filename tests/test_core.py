@@ -978,3 +978,27 @@ def test_module_name_extension():
     schema = Pet.json_schema(embeddable=True, schema_type=SchemaType.OPENAPI_3)
     assert schema['Pet']['x-module-name'] == 'tests.test_core'
     assert schema['Pet']['properties']['type']['x-module-name'] == 'tests.test_core'
+
+
+def test_custom_format():
+    Slug = NewType('Slug', str)
+
+    class SlugField(FieldEncoder[Slug, str]):
+
+        @property
+        def json_schema(self) -> JsonDict:
+            return {
+                'type': 'string',
+                'format': 'slug',
+                'pattern': r'^[a-z0-9\-]+$',
+            }
+
+    JsonSchemaMixin.register_field_encoders({Slug: SlugField()})
+
+    @dataclass
+    class Post(JsonSchemaMixin):
+        slug: Slug
+        content: str
+
+    post = Post.from_dict({"content": "Lorem ipsum dolor ...", "slug": "some-post"})
+    assert post.slug == Slug("some-post")
