@@ -606,8 +606,10 @@ class JsonSchemaMixin:
         if cls._is_json_schema_subclass(field_type):
             field_schema = schema_reference(schema_options.schema_type, field_type_name)
         else:
-            # If is optional[...]
-            if is_optional(field_type):
+            if field_type in cls._field_encoders:
+                field_schema.update(cls._field_encoders[field_type].json_schema)
+            elif is_optional(field_type):
+                # If is optional[...]
                 field_schema = cls._get_field_schema(unwrap_optional(field_type), schema_options)[0]
                 required = False
             elif is_nullable(field_type):
@@ -668,8 +670,6 @@ class JsonSchemaMixin:
                 }
             elif field_type in JSON_ENCODABLE_TYPES:
                 field_schema.update(JSON_ENCODABLE_TYPES[field_type])
-            elif field_type in cls._field_encoders:
-                field_schema.update(cls._field_encoders[field_type].json_schema)
             elif hasattr(field_type, '__supertype__'):  # NewType fields
                 field_schema, _ = cls._get_field_schema(field_type.__supertype__, schema_options)
             else:
