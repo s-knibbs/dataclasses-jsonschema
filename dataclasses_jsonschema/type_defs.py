@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union, Dict, Any, List, TypeVar
+from typing import Union, Dict, Any, List, TypeVar, Literal
 
 try:
     # Supported in future python versions
@@ -47,7 +47,8 @@ class _NULL_TYPE:
     """Sentinel value to represent null json values for nullable fields, to distinguish them from `None`
     for omitted fields.
     """
-    pass
+    def __bool__(self) -> Literal[False]:
+        return False
 
 
 NULL = _NULL_TYPE()
