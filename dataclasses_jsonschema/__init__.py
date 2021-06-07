@@ -4,7 +4,7 @@ import sys
 import functools
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
-from typing import Optional, Type, Union, Any, Dict, Tuple, List, Callable, TypeVar
+from typing import Optional, Type, Union, Any, Dict, Tuple, List, Callable, TypeVar, get_args
 import re
 from datetime import datetime, date
 from dataclasses import fields, is_dataclass, Field, MISSING, dataclass, asdict
@@ -416,6 +416,8 @@ class JsonSchemaMixin:
         except (KeyError, TypeError):
             # Note: Only literal types composed of primitive values are currently supported
             if type(value) in JSON_ENCODABLE_TYPES and (field_type in JSON_ENCODABLE_TYPES or is_literal(field_type)):
+                if is_literal(field_type) and value not in get_args(field_type):
+                    raise TypeError('Literal value is not in allowed set of values for type.')
                 return value
             # Replace any nested dictionaries with their targets
             field_type_name = cls._get_field_type_name(field_type)
