@@ -5,7 +5,7 @@ try:
     # Supported in future python versions
     from typing import TypedDict, Literal  # type: ignore
 except ImportError:
-    from typing_extensions import TypedDict, Literal
+    from typing_extensions import TypedDict, Literal  # type: ignore
 
 
 JsonEncodable = Union[int, float, str, bool]
