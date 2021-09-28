@@ -427,7 +427,7 @@ class JsonSchemaMixin:
         except (KeyError, TypeError):
             # Note: Only literal types composed of primitive values are currently supported
             if type(value) in JSON_ENCODABLE_TYPES and (field_type in JSON_ENCODABLE_TYPES or is_literal(field_type)):
-                return value
+                return field_type(value)
             # Replace any nested dictionaries with their targets
             field_type_name = cls._get_field_type_name(field_type)
             if cls._is_json_schema_subclass(field_type):
