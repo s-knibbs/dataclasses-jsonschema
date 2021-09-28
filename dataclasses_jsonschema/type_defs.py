@@ -1,11 +1,11 @@
 from enum import Enum
-from typing import Union, Dict, Any, List, TypeVar, Literal
+from typing import Union, Dict, Any, List, TypeVar
 
 try:
     # Supported in future python versions
-    from typing import TypedDict  # type: ignore
+    from typing import TypedDict, Literal  # type: ignore
 except ImportError:
-    from typing_extensions import TypedDict
+    from typing_extensions import TypedDict, Literal  # type: ignore
 
 
 JsonEncodable = Union[int, float, str, bool]

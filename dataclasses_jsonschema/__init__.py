@@ -63,6 +63,14 @@ class UnknownEnumValueError(ValueError):
     pass
 
 
+@functools.lru_cache(maxsize=None)
+def get_field_args(field_type: Any) -> tuple:
+    field_args = (Any, Any)
+    if hasattr(field_type, '__args__') and field_type.__args__ is not None:
+        field_args = field_type.__args__
+    return field_args
+
+
 def is_enum(field_type: Any):
     return issubclass_safe(field_type, Enum)
 
@@ -317,12 +325,15 @@ class JsonSchemaMixin:
                 return encoded
             elif field_type_name in MAPPING_TYPES:
                 def encoder(ft, val, o):
+                    field_args = get_field_args(ft)
                     return {
-                        cls._encode_field(ft.__args__[0], k, o): cls._encode_field(ft.__args__[1], v, o)
+                        cls._encode_field(field_args[0], k, o): cls._encode_field(field_args[1], v, o)
                         for k, v in val.items()
                     }
             elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_type.__args__):
-                def encoder(ft, val, o): return [cls._encode_field(ft.__args__[0], v, o) for v in val]
+                def encoder(ft, val, o):
+                    field_args = get_field_args(ft)
+                    return [cls._encode_field(field_args[0], v, o) for v in val]
             elif field_type_name in TUPLE_TYPES:
                 def encoder(ft, val, o):
                     return [cls._encode_field(ft.__args__[idx], v, o) for idx, v in enumerate(val)]
@@ -440,15 +451,17 @@ class JsonSchemaMixin:
                     return decoded
             elif field_type_name in MAPPING_TYPES:
                 def decoder(f, ft, val):
+                    field_args = get_field_args(ft)
                     return {
-                        cls._decode_field(f, ft.__args__[0], k): cls._decode_field(f, ft.__args__[1], v)
+                        cls._decode_field(f, field_args[0], k): cls._decode_field(f, field_args[1], v)
                         for k, v in val.items()
                     }
             elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_type.__args__):
                 seq_type = tuple if field_type_name in TUPLE_TYPES else SEQUENCE_TYPES[field_type_name]
 
                 def decoder(f, ft, val):
-                    return seq_type(cls._decode_field(f, ft.__args__[0], v) for v in val)
+                    field_args = get_field_args(ft)
+                    return seq_type(cls._decode_field(f, field_args[0], v) for v in val)
             elif field_type_name in TUPLE_TYPES:
                 def decoder(f, ft, val):
                     return tuple(cls._decode_field(f, ft.__args__[idx], v) for idx, v in enumerate(val))
@@ -620,6 +633,7 @@ class JsonSchemaMixin:
             field_meta = FieldMeta(schema_type=schema_options.schema_type)
 
         field_type_name = cls._get_field_type_name(field_type)
+        field_args = get_field_args(field_type)  # type: ignore
         if cls._is_json_schema_subclass(field_type):
             field_schema = schema_reference(schema_options.schema_type, field_type_name)
         else:
@@ -637,7 +651,7 @@ class JsonSchemaMixin:
                 field_schema, required = cls._get_field_schema(unwrap_final(field_type), schema_options)
             elif is_literal(field_type):
                 field_schema = {
-                    'enum': list(field_type.__args__ if sys.version_info[:2] >= (3, 7) else field_type.__values__)
+                    'enum': list(field_args if sys.version_info[:2] >= (3, 7) else field_type.__values__)
                 }
             elif is_enum(field_type):
                 member_types = set()
@@ -663,27 +677,24 @@ class JsonSchemaMixin:
             elif field_type_name == 'Union':
                 if schema_options.schema_type == SchemaType.SWAGGER_V2:
                     raise TypeError('Type unions unsupported in Swagger 2.0')
-                field_schema = {
-                    'oneOf': [cls._get_field_schema(variant, schema_options)[0] for variant in field_type.__args__]
-                }
+                field_schema = {'oneOf': [cls._get_field_schema(variant, schema_options)[0] for variant in field_args]}
+                field_schema['oneOf'].sort(key=lambda item: item.get('type', ''))
             elif field_type_name in MAPPING_TYPES:
                 field_schema = {'type': 'object'}
-                if field_type.__args__[1] is not Any:
-                    field_schema['additionalProperties'] = cls._get_field_schema(
-                        field_type.__args__[1], schema_options
-                    )[0]
-            elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_type.__args__):
+                if field_args[1] is not Any:
+                    field_schema['additionalProperties'] = cls._get_field_schema(field_args[1], schema_options)[0]
+            elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_args):
                 field_schema = {'type': 'array'}
-                if field_type.__args__[0] is not Any:
-                    field_schema['items'] = cls._get_field_schema(field_type.__args__[0], schema_options)[0]
+                if field_args[0] is not Any:
+                    field_schema['items'] = cls._get_field_schema(field_args[0], schema_options)[0]
                 if field_type_name in ("Set", "set"):
                     field_schema['uniqueItems'] = True
             elif field_type_name in TUPLE_TYPES:
-                tuple_len = len(field_type.__args__)
+                tuple_len = len(field_args)
                 # TODO: How do we handle Optional type within lists / tuples
                 field_schema = {
                     'type': 'array', 'minItems': tuple_len, 'maxItems': tuple_len,
-                    'items': [cls._get_field_schema(type_arg, schema_options)[0] for type_arg in field_type.__args__]
+                    'items': [cls._get_field_schema(type_arg, schema_options)[0] for type_arg in field_args]
                 }
             elif field_type in JSON_ENCODABLE_TYPES:
                 field_schema.update(JSON_ENCODABLE_TYPES[field_type])
@@ -702,12 +713,14 @@ class JsonSchemaMixin:
     def _get_field_definitions(cls, field_type: Any, definitions: JsonDict,
                                schema_options: SchemaOptions):
         field_type_name = cls._get_field_type_name(field_type)
+        field_args = get_field_args(field_type)
+
         if is_optional(field_type):
             cls._get_field_definitions(unwrap_optional(field_type), definitions, schema_options)
         elif field_type_name in SEQUENCE_TYPES:
-            cls._get_field_definitions(field_type.__args__[0], definitions, schema_options)
+            cls._get_field_definitions(field_args[0], definitions, schema_options)
         elif field_type_name in MAPPING_TYPES:
-            cls._get_field_definitions(field_type.__args__[1], definitions, schema_options)
+            cls._get_field_definitions(field_args[1], definitions, schema_options)
         elif field_type_name == 'Union':
             for variant in field_type.__args__:
                 cls._get_field_definitions(variant, definitions, schema_options)
