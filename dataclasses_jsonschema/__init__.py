@@ -325,12 +325,15 @@ class JsonSchemaMixin:
                 return encoded
             elif field_type_name in MAPPING_TYPES:
                 def encoder(ft, val, o):
+                    field_args = get_field_args(ft)
                     return {
-                        cls._encode_field(ft.__args__[0], k, o): cls._encode_field(ft.__args__[1], v, o)
+                        cls._encode_field(field_args[0], k, o): cls._encode_field(field_args[1], v, o)
                         for k, v in val.items()
                     }
             elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_type.__args__):
-                def encoder(ft, val, o): return [cls._encode_field(ft.__args__[0], v, o) for v in val]
+                def encoder(ft, val, o):
+                    field_args = get_field_args(ft)
+                    return [cls._encode_field(field_args[0], v, o) for v in val]
             elif field_type_name in TUPLE_TYPES:
                 def encoder(ft, val, o):
                     return [cls._encode_field(ft.__args__[idx], v, o) for idx, v in enumerate(val)]

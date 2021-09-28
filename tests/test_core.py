@@ -1013,3 +1013,4 @@ def test_untyped_dict():
 
     example = Example.from_dict({'data': {'a': 'foo'}})
     assert example.data == {'a': 'foo'}
+    assert example.to_dict() == {'data': {'a': 'foo'}}
