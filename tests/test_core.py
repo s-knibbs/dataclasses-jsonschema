@@ -5,7 +5,7 @@ from enum import Enum
 
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address
-from typing import List, NewType, Optional, Union, Set, Any, cast
+from typing import List, NewType, Optional, Union, Set, Any, cast, Dict
 from typing_extensions import Final, Literal
 from uuid import UUID
 
@@ -1002,3 +1002,14 @@ def test_custom_format():
 
     post = Post.from_dict({"content": "Lorem ipsum dolor ...", "slug": "some-post"})
     assert post.slug == Slug("some-post")
+
+
+def test_untyped_dict():
+    """Regression test for https://github.com/s-knibbs/dataclasses-jsonschema/issues/162"""
+
+    @dataclass
+    class Example(JsonSchemaMixin):
+        data: Dict
+
+    example = Example.from_dict({'data': {'a': 'foo'}})
+    assert example.data == {'a': 'foo'}

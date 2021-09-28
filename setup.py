@@ -27,7 +27,16 @@ setup(
         'apispec': ["apispec"]
     },
     setup_requires=['pytest-runner', 'setuptools_scm'],
-    tests_require=['pytest', 'flake8', 'mypy', 'apispec', 'apispec_webframeworks', 'flask', 'pytest-ordering'],
+    tests_require=[
+        'pytest',
+        'flake8',
+        'mypy',
+        'apispec',
+        'apispec_webframeworks',
+        'flask',
+        'pytest-ordering',
+        'types-python-dateutil',
+    ],
     license='MIT',
     use_scm_version=True,
     classifiers=[
