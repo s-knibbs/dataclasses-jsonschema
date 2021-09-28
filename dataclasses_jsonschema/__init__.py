@@ -678,6 +678,7 @@ class JsonSchemaMixin:
                 if schema_options.schema_type == SchemaType.SWAGGER_V2:
                     raise TypeError('Type unions unsupported in Swagger 2.0')
                 field_schema = {'oneOf': [cls._get_field_schema(variant, schema_options)[0] for variant in field_args]}
+                field_schema['oneOf'].sort(key=lambda item: item.get('type', ''))
             elif field_type_name in MAPPING_TYPES:
                 field_schema = {'type': 'object'}
                 if field_args[1] is not Any:
@@ -717,9 +718,9 @@ class JsonSchemaMixin:
         if is_optional(field_type):
             cls._get_field_definitions(unwrap_optional(field_type), definitions, schema_options)
         elif field_type_name in SEQUENCE_TYPES:
-            cls._get_field_definitions(field_args, definitions, schema_options)
+            cls._get_field_definitions(field_args[0], definitions, schema_options)
         elif field_type_name in MAPPING_TYPES:
-            cls._get_field_definitions(field_args, definitions, schema_options)
+            cls._get_field_definitions(field_args[1], definitions, schema_options)
         elif field_type_name == 'Union':
             for variant in field_type.__args__:
                 cls._get_field_definitions(variant, definitions, schema_options)

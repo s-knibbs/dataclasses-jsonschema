@@ -133,8 +133,8 @@ BAR_SCHEMA = {
     'properties': {
         'a': {
             'oneOf': [
+                {'$ref': '#/definitions/Point'},
                 {'type': 'string', 'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']},
-                {'$ref': '#/definitions/Point'}
             ]
         }
     },
