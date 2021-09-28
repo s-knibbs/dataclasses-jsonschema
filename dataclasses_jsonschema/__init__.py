@@ -66,7 +66,7 @@ class UnknownEnumValueError(ValueError):
 @functools.lru_cache(maxsize=None)
 def get_field_args(field_type: Any) -> tuple:
     field_args = (Any, Any)
-    if hasattr(field_type, '__args__'):
+    if hasattr(field_type, '__args__') and field_type.__args__ is not None:
         field_args = field_type.__args__
     return field_args
 
