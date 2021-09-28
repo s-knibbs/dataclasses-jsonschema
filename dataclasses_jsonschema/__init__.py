@@ -633,7 +633,7 @@ class JsonSchemaMixin:
             field_meta = FieldMeta(schema_type=schema_options.schema_type)
 
         field_type_name = cls._get_field_type_name(field_type)
-        field_args = get_field_args(field_type)
+        field_args = get_field_args(field_type)  # type: ignore
         if cls._is_json_schema_subclass(field_type):
             field_schema = schema_reference(schema_options.schema_type, field_type_name)
         else:
