@@ -870,7 +870,7 @@ class JsonSchemaMixin:
             return str(field_type) if match is None else match.group(1)
 
     @classmethod
-    def from_json(cls: Type[T], data: str, validate: bool = True, **json_kwargs) -> T:
+    def from_json(cls: Type[T], data: Union[str, bytes], validate: bool = True, **json_kwargs) -> T:
         return cls.from_dict(json.loads(data, **json_kwargs), validate)
 
     def to_json(self, omit_none: bool = True, validate: bool = False, **json_kwargs) -> str:
