@@ -425,12 +425,15 @@ class JsonSchemaMixin:
         try:
             decoder = cls.__decode_cache[field_type]  # type: ignore
         except (KeyError, TypeError):
-            # Note: Only literal types composed of primitive values are currently supported
-            if type(value) in JSON_ENCODABLE_TYPES and (field_type in JSON_ENCODABLE_TYPES or is_literal(field_type)):
-                return value
             # Replace any nested dictionaries with their targets
             field_type_name = cls._get_field_type_name(field_type)
-            if cls._is_json_schema_subclass(field_type):
+            # Note: Only literal types composed of primitive values are currently supported
+            if type(value) in JSON_ENCODABLE_TYPES and (field_type in JSON_ENCODABLE_TYPES or is_literal(field_type)):
+                if is_literal(field_type):
+                    def decoder(_, __, val): return val
+                else:
+                    def decoder(_, ft, val): return ft(val)
+            elif cls._is_json_schema_subclass(field_type):
                 def decoder(_, ft, val): return ft.from_dict(val, validate=False)
             elif is_nullable(field_type):
                 def decoder(f, ft, val): return cls._decode_field(f, unwrap_nullable(ft), val)

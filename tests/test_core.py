@@ -1014,3 +1014,17 @@ def test_untyped_dict():
     example = Example.from_dict({'data': {'a': 'foo'}})
     assert example.data == {'a': 'foo'}
     assert example.to_dict() == {'data': {'a': 'foo'}}
+
+
+def test_integer_dict_keys():
+    """Tests that types for dict keys are preserved. Technically, JSON only supports strings as dictionary keys,
+    but these can be converted back to the original type using the type annotations
+    """
+
+    @dataclass
+    class Config(JsonSchemaMixin):
+        assignment: Dict[int, str]
+
+    c = Config({1: 'foo', 2: 'bar'})
+    data = c.to_json()
+    assert c == Config.from_json(data)
