@@ -391,7 +391,13 @@ class JsonSchemaMixin:
             cls.__mapped_fields = _get_fields_uncached()
         return cls.__mapped_fields  # type: ignore
 
-    def to_dict(self, omit_none: bool = True, validate: bool = False, validate_enums: bool = True) -> JsonDict:
+    def to_dict(
+        self,
+        omit_none: bool = True,
+        validate: bool = False,
+        validate_enums: bool = True,
+        schema_type: SchemaType = DEFAULT_SCHEMA_TYPE,
+    ) -> JsonDict:
         """Converts the dataclass instance to a JSON encodable dict, with optional JSON schema validation.
 
         If omit_none (default True) is specified, any items with value None are removed
@@ -414,7 +420,7 @@ class JsonSchemaMixin:
             data[self.__discriminator_name] = self.__class__.__name__
 
         if validate:
-            self._validate(data, validate_enums)
+            self._validate(data, validate_enums, schema_type)
         return data
 
     @classmethod
@@ -484,11 +490,14 @@ class JsonSchemaMixin:
         return decoder(field, field_type, value)
 
     @classmethod
-    def _validate(cls, data: JsonDict, validate_enums: bool = True):
+    def _validate(cls, data: JsonDict, validate_enums: bool = True, schema_type: SchemaType = DEFAULT_SCHEMA_TYPE):
+        if schema_type == SchemaType.OPENAPI_3 or schema_type == SchemaType.SWAGGER_V2:
+            warnings.warn("Only draft-04, draft-06 and draft-07 schema types are supported for validation")
+            schema_type = DEFAULT_SCHEMA_TYPE
+
         try:
             if fast_validation:
-                # TODO: Support validating with other schema types
-                schema_validator = cls.__compiled_schema.get(SchemaOptions(DEFAULT_SCHEMA_TYPE, validate_enums))
+                schema_validator = cls.__compiled_schema.get(SchemaOptions(schema_type, validate_enums))
                 if schema_validator is None:
                     formats = {}
                     for encoder in cls._field_encoders.values():
@@ -497,17 +506,23 @@ class JsonSchemaMixin:
                             formats[schema['format']] = schema['pattern']
 
                     schema_validator = fastjsonschema.compile(
-                        cls.json_schema(validate_enums=validate_enums), formats=formats
+                        cls.json_schema(schema_type=schema_type, validate_enums=validate_enums), formats=formats
                     )
-                    cls.__compiled_schema[SchemaOptions(DEFAULT_SCHEMA_TYPE, validate_enums)] = schema_validator
+                    cls.__compiled_schema[SchemaOptions(schema_type, validate_enums)] = schema_validator
                 schema_validator(data)
             else:
-                validate_func(data, cls.json_schema(validate_enums=validate_enums))
+                validate_func(data, cls.json_schema(schema_type=schema_type, validate_enums=validate_enums))
         except JsonSchemaValidationError as e:
             raise ValidationError(str(e)) from e
 
     @classmethod
-    def from_dict(cls: Type[T], data: JsonDict, validate=True, validate_enums: bool = True) -> T:
+    def from_dict(
+        cls: Type[T],
+        data: JsonDict,
+        validate: bool = True,
+        validate_enums: bool = True,
+        schema_type: SchemaType = DEFAULT_SCHEMA_TYPE,
+    ) -> T:
         """Returns a dataclass instance with all nested classes converted from the dict given"""
         if cls is JsonSchemaMixin:
             raise NotImplementedError
@@ -517,11 +532,14 @@ class JsonSchemaMixin:
                 for subclass in cls.__subclasses__():
                     if subclass.__name__ == data[cls.__discriminator_name]:
                         return subclass.from_dict(data, validate)
+                raise TypeError(
+                    f"Class '{cls.__name__}' does not match discriminator '{data[cls.__discriminator_name]}'"
+                )
 
         init_values: Dict[str, Any] = {}
         non_init_values: Dict[str, Any] = {}
         if validate:
-            cls._validate(data, validate_enums)
+            cls._validate(data, validate_enums, schema_type)
 
         for f in cls._get_fields():
             values = init_values if f.field.init else non_init_values
@@ -680,8 +698,8 @@ class JsonSchemaMixin:
             elif field_type_name == 'Union':
                 if schema_options.schema_type == SchemaType.SWAGGER_V2:
                     raise TypeError('Type unions unsupported in Swagger 2.0')
-                field_schema = {'oneOf': [cls._get_field_schema(variant, schema_options)[0] for variant in field_args]}
-                field_schema['oneOf'].sort(key=lambda item: item.get('type', ''))
+                field_schema = {'anyOf': [cls._get_field_schema(variant, schema_options)[0] for variant in field_args]}
+                field_schema['anyOf'].sort(key=lambda item: item.get('type', ''))
             elif field_type_name in MAPPING_TYPES:
                 field_schema = {'type': 'object'}
                 if field_args[1] is not Any:
