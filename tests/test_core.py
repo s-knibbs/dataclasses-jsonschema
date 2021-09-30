@@ -132,7 +132,7 @@ BAR_SCHEMA = {
     'description': "Type with union field",
     'properties': {
         'a': {
-            'oneOf': [
+            'anyOf': [
                 {'$ref': '#/definitions/Point'},
                 {'type': 'string', 'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']},
             ]
@@ -621,7 +621,7 @@ def test_optional_union():
         "description": "Class with optional union",
         "type": "object",
         "properties": {
-            "a": {"oneOf": [{"type": "integer"}, {"type": "string"}]}
+            "a": {"anyOf": [{"type": "integer"}, {"type": "string"}]}
         }
     })
     assert Baz.json_schema() == expected_schema
@@ -1028,3 +1028,27 @@ def test_integer_dict_keys():
     c = Config({1: 'foo', 2: 'bar'})
     data = c.to_json()
     assert c == Config.from_json(data)
+
+
+def test_union_with_discriminator():
+    @dataclass
+    class Pet(JsonSchemaMixin, discriminator=True):
+        pass
+
+    @dataclass
+    class Cat(Pet):
+        breed: str
+
+    @dataclass
+    class Dog(Pet):
+        breed: str
+        walk_distance: Optional[float] = None
+
+    @dataclass
+    class Person(JsonSchemaMixin):
+        name: str
+        pet: Union[Cat, Dog]
+
+    data = Person(name="Joe", pet=Dog(breed="Pug")).to_dict()
+    p = Person.from_dict(data)
+    assert p.pet == Dog(breed="Pug")
