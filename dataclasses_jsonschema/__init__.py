@@ -231,11 +231,14 @@ class JsonSchemaMixin:
         return cls.__discriminator_name
 
     def __init_subclass__(
-            cls,
-            discriminator: Optional[Union[str, bool]] = None,
-            allow_additional_props: bool = True,
-            serialise_properties: Union[Tuple[str, ...], bool] = False,
+        cls,
+        discriminator: Optional[Union[str, bool]] = None,
+        allow_additional_props: bool = True,
+        serialise_properties: Union[Tuple[str, ...], bool] = False,
+        **kwargs,
     ):
+        # See https://github.com/python/mypy/issues/4660
+        super().__init_subclass__(**kwargs)  # type: ignore
         # Initialise caches
         cls.__schema = {}
         cls.__compiled_schema = {}
