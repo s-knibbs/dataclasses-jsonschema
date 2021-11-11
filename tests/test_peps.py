@@ -16,10 +16,10 @@ def test_pep_604_types():
 
     schema = Post.json_schema()
     assert schema['properties']['tags'] == {
-        'oneOf': [{'type': 'string'}, {'type': 'array', 'items': {'type': 'string'}}]
+        'anyOf': [{'type': 'array', 'items': {'type': 'string'}}, {'type': 'string'}]
     }
     assert schema['properties']['metadata'] == {
-        'type': 'array', 'items': {'oneOf': [{'type': 'string'}, {'type': 'integer'}]}
+        'type': 'array', 'items': {'anyOf': [{'type': 'integer'}, {'type': 'string'}]}
     }
     assert schema['required'] == ['body', 'metadata']
 

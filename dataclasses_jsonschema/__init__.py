@@ -4,7 +4,8 @@ import sys
 import functools
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
-from typing import Optional, Type, Union, Any, Dict, Tuple, List, Callable, TypeVar, get_args
+from typing import Optional, Type, Union, Any, Dict, Tuple, List, Callable, TypeVar
+from typing_extensions import get_args
 import re
 from datetime import datetime, date
 from dataclasses import fields, is_dataclass, Field, MISSING, dataclass, asdict
@@ -61,6 +62,14 @@ class ValidationError(Exception):
 
 class UnknownEnumValueError(ValueError):
     pass
+
+
+@functools.lru_cache(maxsize=None)
+def get_field_args(field_type: Any) -> tuple:
+    field_args = (Any, Any)
+    if hasattr(field_type, '__args__') and field_type.__args__ is not None:
+        field_args = field_type.__args__
+    return field_args
 
 
 def is_enum(field_type: Any):
@@ -223,11 +232,14 @@ class JsonSchemaMixin:
         return cls.__discriminator_name
 
     def __init_subclass__(
-            cls,
-            discriminator: Optional[Union[str, bool]] = None,
-            allow_additional_props: bool = True,
-            serialise_properties: Union[Tuple[str, ...], bool] = False,
+        cls,
+        discriminator: Optional[Union[str, bool]] = None,
+        allow_additional_props: bool = True,
+        serialise_properties: Union[Tuple[str, ...], bool] = False,
+        **kwargs,
     ):
+        # See https://github.com/python/mypy/issues/4660
+        super().__init_subclass__(**kwargs)  # type: ignore
         # Initialise caches
         cls.__schema = {}
         cls.__compiled_schema = {}
@@ -317,12 +329,15 @@ class JsonSchemaMixin:
                 return encoded
             elif field_type_name in MAPPING_TYPES:
                 def encoder(ft, val, o):
+                    field_args = get_field_args(ft)
                     return {
-                        cls._encode_field(ft.__args__[0], k, o): cls._encode_field(ft.__args__[1], v, o)
+                        cls._encode_field(field_args[0], k, o): cls._encode_field(field_args[1], v, o)
                         for k, v in val.items()
                     }
             elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_type.__args__):
-                def encoder(ft, val, o): return [cls._encode_field(ft.__args__[0], v, o) for v in val]
+                def encoder(ft, val, o):
+                    field_args = get_field_args(ft)
+                    return [cls._encode_field(field_args[0], v, o) for v in val]
             elif field_type_name in TUPLE_TYPES:
                 def encoder(ft, val, o):
                     return [cls._encode_field(ft.__args__[idx], v, o) for idx, v in enumerate(val)]
@@ -380,7 +395,13 @@ class JsonSchemaMixin:
             cls.__mapped_fields = _get_fields_uncached()
         return cls.__mapped_fields  # type: ignore
 
-    def to_dict(self, omit_none: bool = True, validate: bool = False, validate_enums: bool = True) -> JsonDict:
+    def to_dict(
+        self,
+        omit_none: bool = True,
+        validate: bool = False,
+        validate_enums: bool = True,
+        schema_type: SchemaType = DEFAULT_SCHEMA_TYPE,
+    ) -> JsonDict:
         """Converts the dataclass instance to a JSON encodable dict, with optional JSON schema validation.
 
         If omit_none (default True) is specified, any items with value None are removed
@@ -403,7 +424,7 @@ class JsonSchemaMixin:
             data[self.__discriminator_name] = self.__class__.__name__
 
         if validate:
-            self._validate(data, validate_enums)
+            self._validate(data, validate_enums, schema_type)
         return data
 
     @classmethod
@@ -414,14 +435,17 @@ class JsonSchemaMixin:
         try:
             decoder = cls.__decode_cache[field_type]  # type: ignore
         except (KeyError, TypeError):
+            # Replace any nested dictionaries with their targets
+            field_type_name = cls._get_field_type_name(field_type)
             # Note: Only literal types composed of primitive values are currently supported
             if type(value) in JSON_ENCODABLE_TYPES and (field_type in JSON_ENCODABLE_TYPES or is_literal(field_type)):
                 if is_literal(field_type) and value not in get_args(field_type):
-                    raise TypeError('Literal value is not in allowed set of values for type.')
-                return value
-            # Replace any nested dictionaries with their targets
-            field_type_name = cls._get_field_type_name(field_type)
-            if cls._is_json_schema_subclass(field_type):
+                    raise ValueError('Literal value is not in allowed set of values for type.')
+                elif is_literal(field_type):
+                    def decoder(_, __, val): return val
+                else:
+                    def decoder(_, ft, val): return ft(val)
+            elif cls._is_json_schema_subclass(field_type):
                 def decoder(_, ft, val): return ft.from_dict(val, validate=False)
             elif is_nullable(field_type):
                 def decoder(f, ft, val): return cls._decode_field(f, unwrap_nullable(ft), val)
@@ -442,15 +466,17 @@ class JsonSchemaMixin:
                     return decoded
             elif field_type_name in MAPPING_TYPES:
                 def decoder(f, ft, val):
+                    field_args = get_field_args(ft)
                     return {
-                        cls._decode_field(f, ft.__args__[0], k): cls._decode_field(f, ft.__args__[1], v)
+                        cls._decode_field(f, field_args[0], k): cls._decode_field(f, field_args[1], v)
                         for k, v in val.items()
                     }
             elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_type.__args__):
                 seq_type = tuple if field_type_name in TUPLE_TYPES else SEQUENCE_TYPES[field_type_name]
 
                 def decoder(f, ft, val):
-                    return seq_type(cls._decode_field(f, ft.__args__[0], v) for v in val)
+                    field_args = get_field_args(ft)
+                    return seq_type(cls._decode_field(f, field_args[0], v) for v in val)
             elif field_type_name in TUPLE_TYPES:
                 def decoder(f, ft, val):
                     return tuple(cls._decode_field(f, ft.__args__[idx], v) for idx, v in enumerate(val))
@@ -470,11 +496,14 @@ class JsonSchemaMixin:
         return decoder(field, field_type, value)
 
     @classmethod
-    def _validate(cls, data: JsonDict, validate_enums: bool = True):
+    def _validate(cls, data: JsonDict, validate_enums: bool = True, schema_type: SchemaType = DEFAULT_SCHEMA_TYPE):
+        if schema_type == SchemaType.OPENAPI_3 or schema_type == SchemaType.SWAGGER_V2:
+            warnings.warn("Only draft-04, draft-06 and draft-07 schema types are supported for validation")
+            schema_type = DEFAULT_SCHEMA_TYPE
+
         try:
             if fast_validation:
-                # TODO: Support validating with other schema types
-                schema_validator = cls.__compiled_schema.get(SchemaOptions(DEFAULT_SCHEMA_TYPE, validate_enums))
+                schema_validator = cls.__compiled_schema.get(SchemaOptions(schema_type, validate_enums))
                 if schema_validator is None:
                     formats = {}
                     for encoder in cls._field_encoders.values():
@@ -483,17 +512,23 @@ class JsonSchemaMixin:
                             formats[schema['format']] = schema['pattern']
 
                     schema_validator = fastjsonschema.compile(
-                        cls.json_schema(validate_enums=validate_enums), formats=formats
+                        cls.json_schema(schema_type=schema_type, validate_enums=validate_enums), formats=formats
                     )
-                    cls.__compiled_schema[SchemaOptions(DEFAULT_SCHEMA_TYPE, validate_enums)] = schema_validator
+                    cls.__compiled_schema[SchemaOptions(schema_type, validate_enums)] = schema_validator
                 schema_validator(data)
             else:
-                validate_func(data, cls.json_schema(validate_enums=validate_enums))
+                validate_func(data, cls.json_schema(schema_type=schema_type, validate_enums=validate_enums))
         except JsonSchemaValidationError as e:
             raise ValidationError(str(e)) from e
 
     @classmethod
-    def from_dict(cls: Type[T], data: JsonDict, validate=True, validate_enums: bool = True) -> T:
+    def from_dict(
+        cls: Type[T],
+        data: JsonDict,
+        validate: bool = True,
+        validate_enums: bool = True,
+        schema_type: SchemaType = DEFAULT_SCHEMA_TYPE,
+    ) -> T:
         """Returns a dataclass instance with all nested classes converted from the dict given"""
         if cls is JsonSchemaMixin:
             raise NotImplementedError
@@ -503,11 +538,14 @@ class JsonSchemaMixin:
                 for subclass in cls.__subclasses__():
                     if subclass.__name__ == data[cls.__discriminator_name]:
                         return subclass.from_dict(data, validate)
+                raise TypeError(
+                    f"Class '{cls.__name__}' does not match discriminator '{data[cls.__discriminator_name]}'"
+                )
 
         init_values: Dict[str, Any] = {}
         non_init_values: Dict[str, Any] = {}
         if validate:
-            cls._validate(data, validate_enums)
+            cls._validate(data, validate_enums, schema_type)
 
         for f in cls._get_fields():
             values = init_values if f.field.init else non_init_values
@@ -622,6 +660,7 @@ class JsonSchemaMixin:
             field_meta = FieldMeta(schema_type=schema_options.schema_type)
 
         field_type_name = cls._get_field_type_name(field_type)
+        field_args = get_field_args(field_type)  # type: ignore
         if cls._is_json_schema_subclass(field_type):
             field_schema = schema_reference(schema_options.schema_type, field_type_name)
         else:
@@ -639,7 +678,7 @@ class JsonSchemaMixin:
                 field_schema, required = cls._get_field_schema(unwrap_final(field_type), schema_options)
             elif is_literal(field_type):
                 field_schema = {
-                    'enum': list(field_type.__args__ if sys.version_info[:2] >= (3, 7) else field_type.__values__)
+                    'enum': list(field_args if sys.version_info[:2] >= (3, 7) else field_type.__values__)
                 }
             elif is_enum(field_type):
                 member_types = set()
@@ -665,27 +704,24 @@ class JsonSchemaMixin:
             elif field_type_name == 'Union':
                 if schema_options.schema_type == SchemaType.SWAGGER_V2:
                     raise TypeError('Type unions unsupported in Swagger 2.0')
-                field_schema = {
-                    'oneOf': [cls._get_field_schema(variant, schema_options)[0] for variant in field_type.__args__]
-                }
+                field_schema = {'anyOf': [cls._get_field_schema(variant, schema_options)[0] for variant in field_args]}
+                field_schema['anyOf'].sort(key=lambda item: item.get('type', ''))
             elif field_type_name in MAPPING_TYPES:
                 field_schema = {'type': 'object'}
-                if field_type.__args__[1] is not Any:
-                    field_schema['additionalProperties'] = cls._get_field_schema(
-                        field_type.__args__[1], schema_options
-                    )[0]
-            elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_type.__args__):
+                if field_args[1] is not Any:
+                    field_schema['additionalProperties'] = cls._get_field_schema(field_args[1], schema_options)[0]
+            elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_args):
                 field_schema = {'type': 'array'}
-                if field_type.__args__[0] is not Any:
-                    field_schema['items'] = cls._get_field_schema(field_type.__args__[0], schema_options)[0]
+                if field_args[0] is not Any:
+                    field_schema['items'] = cls._get_field_schema(field_args[0], schema_options)[0]
                 if field_type_name in ("Set", "set"):
                     field_schema['uniqueItems'] = True
             elif field_type_name in TUPLE_TYPES:
-                tuple_len = len(field_type.__args__)
+                tuple_len = len(field_args)
                 # TODO: How do we handle Optional type within lists / tuples
                 field_schema = {
                     'type': 'array', 'minItems': tuple_len, 'maxItems': tuple_len,
-                    'items': [cls._get_field_schema(type_arg, schema_options)[0] for type_arg in field_type.__args__]
+                    'items': [cls._get_field_schema(type_arg, schema_options)[0] for type_arg in field_args]
                 }
             elif field_type in JSON_ENCODABLE_TYPES:
                 field_schema.update(JSON_ENCODABLE_TYPES[field_type])
@@ -704,12 +740,14 @@ class JsonSchemaMixin:
     def _get_field_definitions(cls, field_type: Any, definitions: JsonDict,
                                schema_options: SchemaOptions):
         field_type_name = cls._get_field_type_name(field_type)
+        field_args = get_field_args(field_type)
+
         if is_optional(field_type):
             cls._get_field_definitions(unwrap_optional(field_type), definitions, schema_options)
         elif field_type_name in SEQUENCE_TYPES:
-            cls._get_field_definitions(field_type.__args__[0], definitions, schema_options)
+            cls._get_field_definitions(field_args[0], definitions, schema_options)
         elif field_type_name in MAPPING_TYPES:
-            cls._get_field_definitions(field_type.__args__[1], definitions, schema_options)
+            cls._get_field_definitions(field_args[1], definitions, schema_options)
         elif field_type_name == 'Union':
             for variant in field_type.__args__:
                 cls._get_field_definitions(variant, definitions, schema_options)
@@ -856,7 +894,7 @@ class JsonSchemaMixin:
             return str(field_type) if match is None else match.group(1)
 
     @classmethod
-    def from_json(cls: Type[T], data: str, validate: bool = True, **json_kwargs) -> T:
+    def from_json(cls: Type[T], data: Union[str, bytes], validate: bool = True, **json_kwargs) -> T:
         return cls.from_dict(json.loads(data, **json_kwargs), validate)
 
     def to_json(self, omit_none: bool = True, validate: bool = False, **json_kwargs) -> str:

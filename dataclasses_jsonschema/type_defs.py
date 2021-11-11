@@ -3,9 +3,9 @@ from typing import Union, Dict, Any, List, TypeVar
 
 try:
     # Supported in future python versions
-    from typing import TypedDict  # type: ignore
+    from typing import TypedDict, Literal  # type: ignore
 except ImportError:
-    from typing_extensions import TypedDict
+    from typing_extensions import TypedDict, Literal  # type: ignore
 
 
 JsonEncodable = Union[int, float, str, bool]
@@ -47,7 +47,8 @@ class _NULL_TYPE:
     """Sentinel value to represent null json values for nullable fields, to distinguish them from `None`
     for omitted fields.
     """
-    pass
+    def __bool__(self) -> Literal[False]:
+        return False
 
 
 NULL = _NULL_TYPE()
