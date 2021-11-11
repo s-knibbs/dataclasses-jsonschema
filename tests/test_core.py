@@ -1052,3 +1052,26 @@ def test_union_with_discriminator():
     data = Person(name="Joe", pet=Dog(breed="Pug")).to_dict()
     p = Person.from_dict(data)
     assert p.pet == Dog(breed="Pug")
+
+
+def test_decode_literal():
+    @dataclass
+    class Foo(JsonSchemaMixin):
+        common_field: int
+        name: Literal['Foo'] = 'Foo'
+
+    @dataclass
+    class Bar(JsonSchemaMixin):
+        common_field: int
+        name: Literal['Bar'] = 'Bar'
+        other_field: Optional[int] = None
+
+    @dataclass
+    class Baz(JsonSchemaMixin):
+        my_foo_bar: Union[Bar, Foo]
+
+    decoded = Baz.from_dict(Baz(my_foo_bar=Foo(common_field=1)).to_dict())
+
+    # Even though Bar comes first in the Union for 'my_foor_bar', the literal check on 'name' should
+    # verify that this is a Foo and not assign it to a Bar
+    assert type(decoded.my_foo_bar) == Foo
