@@ -5,7 +5,7 @@ from enum import Enum
 
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address
-from typing import List, NewType, Optional, Union, Set, Any, cast, Dict
+from typing import List, NewType, Optional, Union, Set, Any, cast, Dict, Tuple
 from typing_extensions import Final, Literal
 from uuid import UUID
 
@@ -1052,3 +1052,13 @@ def test_union_with_discriminator():
     data = Person(name="Joe", pet=Dog(breed="Pug")).to_dict()
     p = Person.from_dict(data)
     assert p.pet == Dog(breed="Pug")
+
+
+def test_tuple_item_schema():
+    @dataclass
+    class MapNote(JsonSchemaMixin):
+        text: str
+        point: Tuple[float, float]
+
+    expected_tuple_schema = {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}}
+    assert MapNote.json_schema()['properties']['point'] == expected_tuple_schema

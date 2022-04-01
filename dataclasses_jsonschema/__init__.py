@@ -708,6 +708,7 @@ class JsonSchemaMixin:
                 if field_args[1] is not Any:
                     field_schema['additionalProperties'] = cls._get_field_schema(field_args[1], schema_options)[0]
             elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_args):
+                # TODO: How do we handle Optional type within lists / tuples
                 field_schema = {'type': 'array'}
                 if field_args[0] is not Any:
                     field_schema['items'] = cls._get_field_schema(field_args[0], schema_options)[0]
@@ -715,10 +716,11 @@ class JsonSchemaMixin:
                     field_schema['uniqueItems'] = True
             elif field_type_name in TUPLE_TYPES:
                 tuple_len = len(field_args)
-                # TODO: How do we handle Optional type within lists / tuples
+                # TODO: If there are multiple distinct item_schemas, this is not compliant with OpenAPI 3.0
+                item_schemas = [cls._get_field_schema(type_arg, schema_options)[0] for type_arg in field_args]
                 field_schema = {
                     'type': 'array', 'minItems': tuple_len, 'maxItems': tuple_len,
-                    'items': [cls._get_field_schema(type_arg, schema_options)[0] for type_arg in field_args]
+                    'items': item_schemas[0] if len(set(field_args)) == 1 else item_schemas
                 }
             elif field_type in JSON_ENCODABLE_TYPES:
                 field_schema.update(JSON_ENCODABLE_TYPES[field_type])
