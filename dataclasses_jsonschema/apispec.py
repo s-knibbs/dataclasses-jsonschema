@@ -1,4 +1,4 @@
-from typing import Any, Type, Optional, Union, Dict
+from typing import Any
 
 try:
     from apispec import BasePlugin, APISpec
@@ -6,7 +6,7 @@ try:
 except ImportError:
     raise ImportError("Missing the 'apispec' package. Try installing with 'dataclasses-jsonschema[apispec]'")
 
-from . import T, SchemaType
+from . import SchemaType
 
 
 def _schema_reference(name: str, schema_type: SchemaType) -> str:
@@ -35,7 +35,8 @@ class DataclassesPlugin(BasePlugin):
     def _schema_type(self) -> SchemaType:
         return SchemaType.SWAGGER_V2 if self.spec.openapi_version.major == 2 else SchemaType.OPENAPI_3
 
-    def schema_helper(self, name: str, _: Any, schema: Optional[Union[Type[T], Dict]] = None, **kwargs):
+    def schema_helper(self, name: str, definition: Any, **kwargs):
+        schema = kwargs.get("schema", None)
         if isinstance(schema, dict) or schema is None:
             return schema
         json_schemas = schema.json_schema(schema_type=self._schema_type, embeddable=True)

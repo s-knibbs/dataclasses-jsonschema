@@ -380,7 +380,7 @@ class JsonSchemaMixin:
                 members = inspect.getmembers(cls, inspect.isdatadescriptor)
                 for name, member in members:
                     if name != "__weakref__" and (include_properties is None or name in include_properties):
-                        f = Field(MISSING, None, None, None, None, None, None)
+                        f = Field(MISSING, None, None, None, None, None, None, None)
                         f.name = name
                         f.type = member.fget.__annotations__['return']
                         mapped_fields.append(JsonSchemaField(f, name, is_property=True))
