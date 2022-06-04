@@ -35,7 +35,7 @@ class DataclassesPlugin(BasePlugin):
     def _schema_type(self) -> SchemaType:
         return SchemaType.SWAGGER_V2 if self.spec.openapi_version.major == 2 else SchemaType.OPENAPI_3
 
-    def schema_helper(self, name: str, _: Any, schema: Optional[Union[Type[T], Dict]] = None, **kwargs):
+    def schema_helper(self, name: str, definition: Any, schema: Optional[Union[Type[T], Dict]] = None, **kwargs):
         if isinstance(schema, dict) or schema is None:
             return schema
         json_schemas = schema.json_schema(schema_type=self._schema_type, embeddable=True)
