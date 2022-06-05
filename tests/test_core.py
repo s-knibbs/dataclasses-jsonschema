@@ -199,9 +199,12 @@ def test_embeddable_json_schema():
         'Zoo': ZOO_SCHEMA,
         'Baz': BAZ_SCHEMA
     }
-    assert expected == JsonSchemaMixin.all_json_schemas()
+    # Since JsonSchemaMixin has global state, there could be more schemas
+    # We check if the expected are at least a subset
+    all_schemas = JsonSchemaMixin.all_json_schemas()
+    assert all(schema in all_schemas.items() for schema in expected.items())
     with pytest.warns(DeprecationWarning):
-        assert expected == JsonSchemaMixin.json_schema()
+        assert all_schemas == JsonSchemaMixin.json_schema()
 
 
 def test_json_schema():

@@ -761,6 +761,10 @@ class JsonSchemaMixin:
                         validate_enums=schema_options.validate_enums
                     )
                 )
+        elif field_type in cls._field_encoders:
+            field_schema = cls._field_encoders[field_type].json_schema
+            if 'definitions' in field_schema:
+                definitions.update(field_schema.pop('definitions'))
 
     @classmethod
     def all_json_schemas(
