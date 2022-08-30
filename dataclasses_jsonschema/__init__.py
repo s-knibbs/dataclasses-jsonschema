@@ -317,12 +317,17 @@ class JsonSchemaMixin:
                 # TODO: Find a more reliable method than this since in the case 'Union[List[str], Dict[str, int]]' this
                 # will just output the dict keys as a list
                 encoded = None
-                for variant in field_type.__args__:
+                # Remove primitive types from unions, these are handled later
+                primitives = (int, str, float, bool, type(None))
+                field_args = filter(lambda x: not issubclass(x, primitives), field_type.__args__)
+                for variant in field_args:
                     try:
                         encoded = cls._encode_field(variant, value, omit_none)
                         break
                     except (TypeError, AttributeError, UnknownEnumValueError):
                         continue
+                if encoded is None and isinstance(value, primitives) and type(value) in field_type.__args__:
+                    encoded = cls._encode_field(type(value), value, omit_none)
                 if encoded is None:
                     raise TypeError("No variant of '{}' matched the type '{}'".format(field_type, type(value)))
                 return encoded
@@ -453,7 +458,10 @@ class JsonSchemaMixin:
             elif field_type_name == 'Union':
                 # Attempt to decode the value using each decoder in turn
                 decoded = None
-                for variant in field_type.__args__:
+                # Remove primitive types from unions, these are handled later
+                primitives = (int, str, float, bool, type(None))
+                field_args = filter(lambda x: not issubclass(x, primitives), field_type.__args__)
+                for variant in field_args:
                     try:
                         decoded = cls._decode_field(field, variant, value)
                         break
@@ -461,6 +469,8 @@ class JsonSchemaMixin:
                         continue
                 if decoded is not None:
                     return decoded
+                if isinstance(value, primitives) and type(value) in field_type.__args__:
+                    return cls._decode_field(field, type(value), value)
             elif field_type_name in MAPPING_TYPES:
                 def decoder(f, ft, val):
                     field_args = get_field_args(ft)

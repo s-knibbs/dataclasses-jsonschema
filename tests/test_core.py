@@ -134,6 +134,7 @@ BAR_SCHEMA = {
         'a': {
             'anyOf': [
                 {'$ref': '#/definitions/Point'},
+                {'type': 'string'},
                 {'type': 'string', 'enum': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']},
             ]
         }
