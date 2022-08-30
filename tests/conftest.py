@@ -60,7 +60,7 @@ class Foo(SubSchemas):
 @dataclass(eq=True)
 class Bar(JsonSchemaMixin):
     """Type with union field"""
-    a: Union[Weekday, Point]
+    a: Union[str, Weekday, Point]
 
 
 @dataclass
