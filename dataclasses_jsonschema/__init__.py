@@ -341,6 +341,9 @@ class JsonSchemaMixin:
             elif field_type_name in SEQUENCE_TYPES or (field_type_name in TUPLE_TYPES and ... in field_type.__args__):
                 def encoder(ft, val, o):
                     field_args = get_field_args(ft)
+                    # Treat strings as non-iterable
+                    if isinstance(val, str):
+                        raise TypeError(f"Attempted encode of '{val}' as '{field_type_name}'")
                     return [cls._encode_field(field_args[0], v, o) for v in val]
             elif field_type_name in TUPLE_TYPES:
                 def encoder(ft, val, o):
@@ -483,6 +486,9 @@ class JsonSchemaMixin:
 
                 def decoder(f, ft, val):
                     field_args = get_field_args(ft)
+                    # Treat strings as non-iterable
+                    if isinstance(val, str):
+                        raise TypeError(f"Attempted decode of '{val}' as '{seq_type}'")
                     return seq_type(cls._decode_field(f, field_args[0], v) for v in val)
             elif field_type_name in TUPLE_TYPES:
                 def decoder(f, ft, val):
