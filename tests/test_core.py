@@ -1063,3 +1063,12 @@ def test_tuple_item_schema():
 
     expected_tuple_schema = {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}}
     assert MapNote.json_schema()['properties']['point'] == expected_tuple_schema
+
+
+def test_union_issue_190():
+    @dataclass
+    class Config(JsonSchemaMixin):
+        option: Union[str, Dict[str, str]]
+
+    conf = Config.from_dict({"option": "test"})
+    assert conf.to_dict() == {"option": "test"}
