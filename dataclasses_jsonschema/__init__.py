@@ -75,7 +75,7 @@ def is_enum(field_type: Any):
     return issubclass_safe(field_type, Enum)
 
 
-def issubclass_safe(klass: Any, base: Type):
+def issubclass_safe(klass: Any, base: Union[Type, Tuple[Type, ...]]):
     try:
         return issubclass(klass, base)
     except TypeError:
@@ -319,7 +319,7 @@ class JsonSchemaMixin:
                 encoded = None
                 # Remove primitive types from unions, these are handled later
                 primitives = (int, str, float, bool, type(None))
-                field_args = filter(lambda x: not issubclass(x, primitives), field_type.__args__)
+                field_args = filter(lambda x: not issubclass_safe(x, primitives), field_type.__args__)
                 for variant in field_args:
                     try:
                         encoded = cls._encode_field(variant, value, omit_none)
@@ -463,7 +463,7 @@ class JsonSchemaMixin:
                 decoded = None
                 # Remove primitive types from unions, these are handled later
                 primitives = (int, str, float, bool, type(None))
-                field_args = filter(lambda x: not issubclass(x, primitives), field_type.__args__)
+                field_args = filter(lambda x: not issubclass_safe(x, primitives), field_type.__args__)
                 for variant in field_args:
                     try:
                         decoded = cls._decode_field(field, variant, value)
