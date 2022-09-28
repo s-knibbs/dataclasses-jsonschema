@@ -191,7 +191,16 @@ class FieldMeta:
             if v is not None and k not in ["schema_type", "extensions"]
         }
         if (self.schema_type in [SchemaType.SWAGGER_V2, SchemaType.OPENAPI_3]) and self.extensions is not None:
-            schema_dict.update({'x-' + k: v for k, v in self.extensions.items()})
+            spec_properties = ["multipleOf", "maximum", "exclusiveMaximum", "minimum", "exclusiveMinimum", "maxLength", "minLength", "pattern", "maxItems", "minItems", "uniqueItems", "maxProperties", "minProperties"]
+            props = {}
+            extensions = {}
+            for k, v in self.extensions.items():
+                if k in spec_properties:
+                    props[k] = v
+                else:
+                    extensions[f'x-{k}'] = v
+            schema_dict.update({**props, **extensions})
+            # schema_dict.update({f'{"x-" if v in spec_properties else ""}{k}': v for k, v in self.extensions.items()})
         # Swagger 2 only supports a single example value per property
         if "examples" in schema_dict and len(schema_dict["examples"]) > 0 and self.schema_type == SchemaType.SWAGGER_V2:
             schema_dict["example"] = schema_dict["examples"][0]
