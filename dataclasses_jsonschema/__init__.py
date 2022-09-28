@@ -763,6 +763,11 @@ class JsonSchemaMixin:
             cls._get_field_definitions(field_args[0], definitions, schema_options)
         elif field_type_name in MAPPING_TYPES:
             cls._get_field_definitions(field_args[1], definitions, schema_options)
+        elif field_type_name in TUPLE_TYPES:
+            for field_arg in field_args:
+                if field_arg == Ellipsis:
+                    continue
+                cls._get_field_definitions(field_arg, definitions, schema_options)
         elif field_type_name == 'Union':
             for variant in field_type.__args__:
                 cls._get_field_definitions(variant, definitions, schema_options)
