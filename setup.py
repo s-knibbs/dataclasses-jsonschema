@@ -7,6 +7,18 @@ requires = [
     'dataclasses;python_version<"3.7"'
 ]
 
+test_dependencies = [
+    'apispec_webframeworks',
+    'apispec[yaml]',
+    'flake8',
+    'flask',
+    'mypy',
+    'pytest-ordering',
+    'pytest',
+    'tox-gh-actions',
+    'tox',
+    'types-python-dateutil',
+]
 
 def read(f):
     return open(f, encoding='utf-8').read()
@@ -23,20 +35,14 @@ setup(
     url='https://github.com/s-knibbs/dataclasses-jsonschema',
     install_requires=requires,
     extras_require={
+        'apispec': ["apispec"],
         'fast-validation': ["fastjsonschema"],
-        'apispec': ["apispec"]
+        'fast-dateparsing': ["ciso8601"],
+        'fast-uuid': ["fastuuid"],
+        'test': test_dependencies
     },
     setup_requires=['pytest-runner', 'setuptools_scm'],
-    tests_require=[
-        'pytest',
-        'flake8',
-        'mypy',
-        'apispec',
-        'apispec_webframeworks',
-        'flask',
-        'pytest-ordering',
-        'types-python-dateutil',
-    ],
+    tests_require=test_dependencies,
     license='MIT',
     use_scm_version=True,
     classifiers=[
@@ -47,6 +53,7 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Topic :: Software Development :: Libraries'
     ]
 )

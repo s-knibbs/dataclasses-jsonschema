@@ -7,7 +7,11 @@ from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address
 from typing import List, NewType, Optional, Union, Set, Any, cast, Dict, Tuple
 from typing_extensions import Final, Literal
-from uuid import UUID
+
+try:
+    from fastuuid import UUID
+except ImportError:
+    from uuid import UUID
 
 from dataclasses_jsonschema.type_defs import Nullable, NULL, JsonDict
 from .conftest import Foo, Point, Recursive, OpaqueData, ShoppingCart, Product, ProductList, SubSchemas, Bar, Weekday, \

@@ -4,12 +4,12 @@ import sys
 import functools
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
-from typing import Optional, Type, Union, Any, Dict, Tuple, List, Callable, TypeVar
+from typing import Optional, Type, Union, Any, Dict, Tuple, List, Callable, TypeVar, ClassVar
 import re
 from datetime import datetime, date
 from dataclasses import fields, is_dataclass, Field, MISSING, dataclass, asdict
-from uuid import UUID
 from enum import Enum
+from uuid import UUID as SlowUUID
 import warnings
 
 try:
@@ -17,12 +17,18 @@ try:
 except ImportError:
     from typing_extensions import Final, Literal  # type: ignore
 
+try:
+    from fastuuid import UUID as FastUUID
+
+    have_fastuuid = True
+except ImportError:
+    have_fastuuid = False
 
 from .field_types import (  # noqa: F401
     FieldEncoder, DateFieldEncoder, DateTimeFieldEncoder, UuidField, DecimalField,
     IPv4AddressField, IPv6AddressField, DateTimeField
 )
-from .type_defs import JsonDict, SchemaType, JsonSchemaMeta, _NULL_TYPE, NULL  # noqa: F401
+from .type_defs import JsonDict, NoneType, SchemaType, JsonSchemaMeta, _NULL_TYPE, NULL  # noqa: F401
 from .type_hints import get_class_type_hints
 
 try:
@@ -54,6 +60,12 @@ SEQUENCE_TYPES = {
 MAPPING_TYPES = ('Dict', 'Mapping', 'dict')
 TUPLE_TYPES = ('Tuple', 'tuple')
 
+PRIMITIVES: Tuple[Type, ...] = (int, str, float, bool, type(None))
+
+IS_PYTHON_36 = sys.version_info[:2] == (3, 6)
+IS_PYTHON_37_PLUS = sys.version_info[:2] >= (3, 7)
+IS_PYTHON_310_PLUS = sys.version_info[:2] >= (3, 10)
+
 
 class ValidationError(Exception):
     pass
@@ -84,7 +96,7 @@ def issubclass_safe(klass: Any, base: Union[Type, Tuple[Type, ...]]):
 
 def is_optional(field: Any) -> bool:
     try:
-        return field.__origin__ == Union and type(None) in field.__args__
+        return field.__origin__ == Union and NoneType in field.__args__
     except AttributeError:
         return False
 
@@ -93,7 +105,7 @@ def is_final(field: Any) -> bool:
     try:
         return field.__origin__ == Final
     except AttributeError:
-        if sys.version_info[:2] == (3, 6):
+        if IS_PYTHON_36:
             return type(field).__qualname__ == "_Final"
         return False
 
@@ -102,14 +114,14 @@ def is_literal(field: Any) -> bool:
     try:
         return field.__origin__ == Literal
     except AttributeError:
-        if sys.version_info[:2] == (3, 6):
+        if IS_PYTHON_36:
             return type(field).__qualname__ == "_Literal"
         return False
 
 
 def is_nullable(field: Any) -> bool:
     try:
-        if sys.version_info[:2] == (3, 6):
+        if IS_PYTHON_36:
             # Hack to get python 3.6 working
             return "_NULL_TYPE" in repr(field)
         return field.__origin__ == Union and _NULL_TYPE in field.__args__
@@ -118,19 +130,21 @@ def is_nullable(field: Any) -> bool:
 
 
 def unwrap_final(final_type: Any) -> Any:
-    return final_type.__args__[0] if sys.version_info[:2] >= (3, 7) else final_type.__type__
+    return final_type.__args__[0] if IS_PYTHON_37_PLUS else final_type.__type__
 
 
 def unwrap_optional(optional_type: Any) -> Any:
-    idx = optional_type.__args__.index(type(None))
-    return Union[optional_type.__args__[:idx] + optional_type.__args__[idx+1:]]
+    args = optional_type.__args__
+    idx = args.index(NoneType)
+    return Union[args[:idx] + args[idx+1:]]
 
 
 def unwrap_nullable(nullable_type: Any) -> Any:
-    if sys.version_info[:2] == (3, 6):
-        return Union[nullable_type.__args__]
-    idx = nullable_type.__args__.index(_NULL_TYPE)
-    return Union[nullable_type.__args__[:idx] + nullable_type.__args__[idx+1:]]
+    args = nullable_type.__args__
+    if IS_PYTHON_36:
+        return Union[args]
+    idx = args.index(_NULL_TYPE)
+    return Union[args[:idx] + args[idx+1:]]
 
 
 def schema_reference(schema_type: SchemaType, schema_name: str) -> Dict[str, str]:
@@ -148,6 +162,17 @@ FieldExcludeList = Tuple[Union[str, Tuple[str, 'FieldExcludeList']], ...]  # typ
 
 DEFAULT_SCHEMA_TYPE = SchemaType.DRAFT_06
 
+_jsonschema_mixin_field_encoders: Dict[Type, FieldEncoder] = {
+    date: DateFieldEncoder(),
+    datetime: DateTimeFieldEncoder(),
+    SlowUUID: UuidField(),
+    Decimal: DecimalField(),
+    IPv4Address: IPv4AddressField(),
+    IPv6Address: IPv6AddressField(),
+}
+if have_fastuuid:
+    _jsonschema_mixin_field_encoders[FastUUID] = UuidField()
+
 
 @functools.lru_cache()
 def _to_camel_case(value: str) -> str:
@@ -156,6 +181,35 @@ def _to_camel_case(value: str) -> str:
         return "".join([parts[0]] + [part[0].upper() + part[1:] for part in parts[1:]])
     else:
         return value
+
+
+# statically defined codecs can run faster outside of classmethods
+def _encoder_is_json_schema_subclass(_, v, o):
+    # Only need to validate at the top level
+    return v.to_dict(omit_none=o, validate=False)
+
+
+def _decoder_is_json_schema_subclass(_, ft, val):
+    return ft.from_dict(val, validate=False)
+
+
+def _decoder_identity(_, __, val):
+    return val
+
+
+def _decoder_to_ft(_, ft, val):
+    return ft(val)
+
+
+def _encoder_is_enum(_, v, __):
+    try:
+        return v.value
+    except AttributeError as e:
+        raise UnknownEnumValueError(f'Unknown enum value: {v}') from e
+
+
+def _encoder_identity(_, v, __):
+    return v
 
 
 @dataclass(frozen=True)
@@ -203,28 +257,22 @@ class JsonSchemaMixin:
     """Mixin which adds methods to generate a JSON schema and
     convert to and from JSON encodable dicts with validation against the schema
     """
-    _field_encoders: Dict[Type, FieldEncoder] = {
-        date: DateFieldEncoder(),
-        datetime: DateTimeFieldEncoder(),
-        UUID: UuidField(),
-        Decimal: DecimalField(),
-        IPv4Address: IPv4AddressField(),
-        IPv6Address: IPv6AddressField()
-    }
+
+    _field_encoders: ClassVar[Dict[Type, FieldEncoder]] = _jsonschema_mixin_field_encoders
 
     # Cache of the generated schema
-    __schema: Dict[SchemaOptions, JsonDict]
-    __compiled_schema: Dict[SchemaOptions, Callable]
-    __definitions: Dict[SchemaOptions, JsonDict]
+    __schema: ClassVar[Dict[SchemaOptions, JsonDict]]
+    __compiled_schema: ClassVar[Dict[SchemaOptions, Callable]]
+    __definitions: ClassVar[Dict[SchemaOptions, JsonDict]]
     # Cache of field encode / decode functions
-    __encode_cache: Dict[Any, _ValueEncoder]
-    __decode_cache: Dict[Any, _ValueDecoder]
-    __mapped_fields: List[JsonSchemaField]
-    __discriminator_name: Optional[str]
+    __encode_cache: ClassVar[Dict[Any, _ValueEncoder]]
+    __decode_cache: ClassVar[Dict[Any, _ValueDecoder]]
+    __mapped_fields: ClassVar[List[JsonSchemaField]]
+    __discriminator_name: ClassVar[Optional[str]]
     # True if __discriminator_name is inherited from the base class
-    __discriminator_inherited: bool
-    __allow_additional_props: bool
-    __serialise_properties: Union[Tuple[str, ...], bool]
+    __discriminator_inherited: ClassVar[bool]
+    __allow_additional_props: ClassVar[bool]
+    __serialise_properties: ClassVar[Union[Tuple[str, ...], bool]]
 
     @classmethod
     def _discriminator(cls) -> Optional[str]:
@@ -307,26 +355,21 @@ class JsonSchemaMixin:
             elif is_final(field_type):
                 def encoder(ft, val, o): return cls._encode_field(unwrap_final(ft), val, o)
             elif is_enum(field_type):
-                def encoder(_, v, __):
-                    try:
-                        return v.value
-                    except AttributeError as e:
-                        raise UnknownEnumValueError(f'Unknown enum value: {v}') from e
+                encoder = _encoder_is_enum
             elif field_type_name == 'Union':
                 # Attempt to encode the field with each union variant.
                 # TODO: Find a more reliable method than this since in the case 'Union[List[str], Dict[str, int]]' this
                 # will just output the dict keys as a list
                 encoded = None
                 # Remove primitive types from unions, these are handled later
-                primitives = (int, str, float, bool, type(None))
-                field_args = filter(lambda x: not issubclass_safe(x, primitives), field_type.__args__)
+                field_args = filter(lambda x: not issubclass_safe(x, PRIMITIVES), field_type.__args__)
                 for variant in field_args:
                     try:
                         encoded = cls._encode_field(variant, value, omit_none)
                         break
                     except (TypeError, AttributeError, UnknownEnumValueError):
                         continue
-                if encoded is None and isinstance(value, primitives) and type(value) in field_type.__args__:
+                if encoded is None and isinstance(value, PRIMITIVES) and type(value) in field_type.__args__:
                     encoded = cls._encode_field(type(value), value, omit_none)
                 if encoded is None:
                     raise TypeError("No variant of '{}' matched the type '{}'".format(field_type, type(value)))
@@ -349,13 +392,13 @@ class JsonSchemaMixin:
                 def encoder(ft, val, o):
                     return [cls._encode_field(ft.__args__[idx], v, o) for idx, v in enumerate(val)]
             elif cls._is_json_schema_subclass(field_type):
-                # Only need to validate at the top level
-                def encoder(_, v, o): return v.to_dict(omit_none=o, validate=False)
+                encoder = _encoder_is_json_schema_subclass
             elif hasattr(field_type, "__supertype__"):  # NewType field
                 def encoder(ft, v, o):
                     return cls._encode_field(ft.__supertype__, v, o)
             else:
-                def encoder(_, v, __): return v
+                encoder = _encoder_identity
+
             cls.__encode_cache[field_type] = encoder  # type: ignore
         return encoder(field_type, value, omit_none)
 
@@ -388,7 +431,10 @@ class JsonSchemaMixin:
                 members = inspect.getmembers(cls, inspect.isdatadescriptor)
                 for name, member in members:
                     if name != "__weakref__" and (include_properties is None or name in include_properties):
-                        f = Field(MISSING, None, None, None, None, None, None)
+                        if IS_PYTHON_310_PLUS:
+                            f = Field(MISSING, None, None, None, None, None, None, kw_only=False)
+                        else:
+                            f = Field(MISSING, None, None, None, None, None, None)
                         f.name = name
                         f.type = member.fget.__annotations__['return']
                         mapped_fields.append(JsonSchemaField(f, name, is_property=True))
@@ -447,11 +493,11 @@ class JsonSchemaMixin:
             # Note: Only literal types composed of primitive values are currently supported
             if type(value) in JSON_ENCODABLE_TYPES and (field_type in JSON_ENCODABLE_TYPES or is_literal(field_type)):
                 if is_literal(field_type):
-                    def decoder(_, __, val): return val
+                    decoder = _decoder_identity
                 else:
-                    def decoder(_, ft, val): return ft(val)
+                    decoder = _decoder_to_ft
             elif cls._is_json_schema_subclass(field_type):
-                def decoder(_, ft, val): return ft.from_dict(val, validate=False)
+                decoder = _decoder_is_json_schema_subclass
             elif is_nullable(field_type):
                 def decoder(f, ft, val): return cls._decode_field(f, unwrap_nullable(ft), val)
             elif is_optional(field_type):
@@ -462,8 +508,7 @@ class JsonSchemaMixin:
                 # Attempt to decode the value using each decoder in turn
                 decoded = None
                 # Remove primitive types from unions, these are handled later
-                primitives = (int, str, float, bool, type(None))
-                field_args = filter(lambda x: not issubclass_safe(x, primitives), field_type.__args__)
+                field_args = filter(lambda x: not issubclass_safe(x, PRIMITIVES), field_type.__args__)
                 for variant in field_args:
                     try:
                         decoded = cls._decode_field(field, variant, value)
@@ -472,7 +517,7 @@ class JsonSchemaMixin:
                         continue
                 if decoded is not None:
                     return decoded
-                if isinstance(value, primitives) and type(value) in field_type.__args__:
+                if isinstance(value, PRIMITIVES) and type(value) in field_type.__args__:
                     return cls._decode_field(field, type(value), value)
             elif field_type_name in MAPPING_TYPES:
                 def decoder(f, ft, val):
@@ -499,9 +544,9 @@ class JsonSchemaMixin:
                 def decoder(f, ft, val):
                     return cls._decode_field(f, ft.__supertype__, val)
             elif is_enum(field_type):
-                def decoder(_, ft, val): return ft(val)
+                decoder = _decoder_to_ft
             elif field_type == Any:
-                def decoder(_, __, val): return val
+                decoder = _decoder_identity
             if decoder is None:
                 warnings.warn(f"Unable to decode value for '{field}: {field_type_name}'")
                 return value
@@ -691,7 +736,7 @@ class JsonSchemaMixin:
                 field_schema, required = cls._get_field_schema(unwrap_final(field_type), schema_options)
             elif is_literal(field_type):
                 field_schema = {
-                    'enum': list(field_args if sys.version_info[:2] >= (3, 7) else field_type.__values__)
+                    'enum': list(field_args if IS_PYTHON_37_PLUS else field_type.__values__)
                 }
             elif is_enum(field_type):
                 member_types = set()
