@@ -1,13 +1,14 @@
 from __future__ import annotations
+
 from typing import Any
 
 try:
-    from apispec import BasePlugin, APISpec
+    from apispec import APISpec, BasePlugin
     from apispec.exceptions import DuplicateComponentNameError
 except ImportError:
     raise ImportError("Missing the 'apispec' package. Try installing with 'dataclasses-jsonschema[apispec]'")
 
-from . import SchemaType, JsonSchemaMixin
+from . import JsonSchemaMixin, SchemaType
 
 
 def _schema_reference(name: str, schema_type: SchemaType) -> str:

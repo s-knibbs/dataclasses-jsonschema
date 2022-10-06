@@ -1,8 +1,8 @@
 import warnings
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
-from typing import cast, TypeVar, Generic, Optional
+from typing import Generic, Optional, TypeVar, cast
 
 # Note, iso8601 vs rfc3339 is subtle. rfc3339 is stricter, roughly a subset of iso8601.
 # ciso8601 doesn’t support the entirety of the ISO 8601 spec, only a popular subset.
@@ -10,6 +10,7 @@ try:
     from ciso8601 import parse_datetime
 except ImportError:
     from dateutil.parser import parse
+
     parse_datetime = parse  # type: ignore
 
 try:
@@ -17,10 +18,10 @@ try:
 except ImportError:
     from uuid import UUID
 
-from .type_defs import JsonEncodable, JsonDict
+from .type_defs import JsonDict, JsonEncodable
 
-T = TypeVar('T')
-OutType = TypeVar('OutType', bound=JsonEncodable)
+T = TypeVar("T")
+OutType = TypeVar("OutType", bound=JsonEncodable)
 
 
 class FieldEncoder(Generic[T, OutType]):
@@ -74,11 +75,10 @@ class DateTimeFieldEncoder(FieldEncoder[datetime, str]):
 
 # Alias for backwards compat
 DateTimeField = DateTimeFieldEncoder
-UUID_REGEX = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+UUID_REGEX = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
 
 class UuidField(FieldEncoder[UUID, str]):
-
     def to_wire(self, value: UUID) -> str:
         return str(value)
 
@@ -87,15 +87,10 @@ class UuidField(FieldEncoder[UUID, str]):
 
     @property
     def json_schema(self) -> JsonDict:
-        return {
-            'type': 'string',
-            'format': 'uuid',
-            'pattern': UUID_REGEX
-        }
+        return {"type": "string", "format": "uuid", "pattern": UUID_REGEX}
 
 
 class DecimalField(FieldEncoder[Decimal, float]):
-
     def __init__(self, precision: Optional[int] = None):
         self.precision = precision
 
@@ -107,14 +102,13 @@ class DecimalField(FieldEncoder[Decimal, float]):
 
     @property
     def json_schema(self) -> JsonDict:
-        schema: JsonDict = {'type': 'number'}
+        schema: JsonDict = {"type": "number"}
         if self.precision is not None and self.precision > 0:
-            schema['multipleOf'] = float('0.' + '0' * (self.precision - 1) + '1')
+            schema["multipleOf"] = float("0." + "0" * (self.precision - 1) + "1")
         return schema
 
 
 class IPv4AddressField(FieldEncoder[IPv4Address, str]):
-
     def to_wire(self, value: IPv4Address) -> str:
         return str(value)
 
@@ -123,11 +117,10 @@ class IPv4AddressField(FieldEncoder[IPv4Address, str]):
 
     @property
     def json_schema(self) -> JsonDict:
-        return {'type': 'string', 'format': 'ipv4'}
+        return {"type": "string", "format": "ipv4"}
 
 
 class IPv6AddressField(FieldEncoder[IPv6Address, str]):
-
     def to_wire(self, value: IPv6Address) -> str:
         return str(value)
 
@@ -136,4 +129,4 @@ class IPv6AddressField(FieldEncoder[IPv6Address, str]):
 
     @property
     def json_schema(self) -> JsonDict:
-        return {'type': 'string', 'format': 'ipv6'}
+        return {"type": "string", "format": "ipv6"}
