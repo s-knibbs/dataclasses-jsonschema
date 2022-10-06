@@ -2,7 +2,11 @@ from typing import Optional, List, Dict, NewType, Any, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
-from uuid import UUID
+
+try:
+    from fastuuid import UUID
+except ImportError:
+    from uuid import UUID
 
 from dataclasses_jsonschema import JsonSchemaMixin, FieldEncoder
 

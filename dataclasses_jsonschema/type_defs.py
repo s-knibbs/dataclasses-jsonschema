@@ -55,3 +55,5 @@ NULL = _NULL_TYPE()
 
 T = TypeVar("T")
 Nullable = Union[T, _NULL_TYPE]
+
+NoneType = type(None)

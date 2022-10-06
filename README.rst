@@ -36,6 +36,21 @@ For improved validation performance using `fastjsonschema <https://github.com/ho
 
     ~$ pip install dataclasses-jsonschema[fast-validation]
 
+For improved uuid performance using `fastuuid <https://pypi.org/project/fastuuid/>`_, install with:
+
+.. code:: bash
+
+    ~$ pip install dataclasses-jsonschema[fast-uuid]
+
+For improved date and datetime parsing performance using `ciso8601 <https://pypi.org/project/ciso8601/>`_, install with:
+
+.. code:: bash
+
+    ~$ pip install dataclasses-jsonschema[fast-dateparsing]
+
+Beware `ciso8601` doesn’t support the entirety of the ISO 8601 spec, only a popular subset.
+
+
 Examples
 --------
 
