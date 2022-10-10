@@ -7,8 +7,8 @@ except ImportError:
     # Python 3.6
     from typing import _ForwardRef as ForwardRef  # type: ignore
 
-from typing import Type, Dict, Any, Union, Tuple, Set, List
 from typing import _eval_type  # type: ignore
+from typing import Any, Dict, List, Set, Tuple, Type, Union
 
 
 def get_elts(op: ast.BinOp):
@@ -21,7 +21,6 @@ def get_elts(op: ast.BinOp):
 
 
 class RewriteUnionTypes(ast.NodeTransformer):
-
     def __init__(self):
         self.rewritten = False
 
@@ -29,7 +28,7 @@ class RewriteUnionTypes(ast.NodeTransformer):
         if isinstance(node.op, ast.BitOr):
             self.rewritten = True
             return ast.Subscript(
-                value=ast.Name(id='_Union', ctx=ast.Load(), lineno=1, col_offset=1),
+                value=ast.Name(id="_Union", ctx=ast.Load(), lineno=1, col_offset=1),
                 slice=ast.Index(
                     value=ast.Tuple(elts=list(get_elts(node)), ctx=ast.Load(), lineno=1, col_offset=1),
                     ctx=ast.Load(),
@@ -45,17 +44,16 @@ class RewriteUnionTypes(ast.NodeTransformer):
 
 
 class RewriteBuiltinGenerics(ast.NodeTransformer):
-
     def __init__(self):
         self.rewritten = False
         # Collections are prefixed with _ to prevent any potential name clashes
         self.replacements = {
-            'list': '_List',
-            'set': '_Set',
-            'frozenset': '_Frozenset',
-            'dict': '_Dict',
-            'type': '_Type',
-            'tuple': '_Tuple',
+            "list": "_List",
+            "set": "_Set",
+            "frozenset": "_Frozenset",
+            "dict": "_Dict",
+            "type": "_Type",
+            "tuple": "_Tuple",
         }
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
@@ -71,19 +69,19 @@ def get_class_type_hints(klass: Type, localns=None) -> Dict[str, Any]:
     hints = {}
     for base in reversed(klass.__mro__):
         base_globals = sys.modules[base.__module__].__dict__
-        base_globals['_Union'] = Union
+        base_globals["_Union"] = Union
         if sys.version_info < (3, 9):
-            base_globals['_List'] = List
-            base_globals['_Set'] = Set
-            base_globals['_Type'] = Type
-            base_globals['_Tuple'] = Tuple
-            base_globals['_Dict'] = Dict
-        ann = base.__dict__.get('__annotations__', {})
+            base_globals["_List"] = List
+            base_globals["_Set"] = Set
+            base_globals["_Type"] = Type
+            base_globals["_Tuple"] = Tuple
+            base_globals["_Dict"] = Dict
+        ann = base.__dict__.get("__annotations__", {})
         for name, value in ann.items():
             if value is None:
                 value = type(None)
             if isinstance(value, str):
-                t = ast.parse(value, '<unknown>', 'eval')
+                t = ast.parse(value, "<unknown>", "eval")
                 union_transformer = RewriteUnionTypes()
                 t = union_transformer.visit(t)
                 builtin_generics_transformer = RewriteBuiltinGenerics()
@@ -92,7 +90,7 @@ def get_class_type_hints(klass: Type, localns=None) -> Dict[str, Any]:
                 if builtin_generics_transformer.rewritten or union_transformer.rewritten:
                     # Note: ForwardRef raises a TypeError when given anything that isn't a string, so we need
                     # to compile & eval the ast here
-                    code = compile(t, '<unknown>', 'eval')
+                    code = compile(t, "<unknown>", "eval")
                     hints[name] = eval(code, base_globals, localns)
                     continue
                 else:

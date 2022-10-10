@@ -1,11 +1,11 @@
 import json
-from typing import Optional, List
 from dataclasses import dataclass
+from typing import List, Optional
 
 from apispec import APISpec
 
-from dataclasses_jsonschema.apispec import DataclassesPlugin
 from dataclasses_jsonschema import JsonSchemaMixin
+from dataclasses_jsonschema.apispec import DataclassesPlugin
 
 # Create an APISpec
 spec = APISpec(
@@ -19,6 +19,7 @@ spec = APISpec(
 @dataclass
 class Category(JsonSchemaMixin):
     """Pet category"""
+
     name: str
     id: Optional[int]
 
@@ -26,6 +27,7 @@ class Category(JsonSchemaMixin):
 @dataclass
 class Pet(JsonSchemaMixin):
     """A pet"""
+
     categories: List[Category]
     name: str
 
@@ -33,6 +35,7 @@ class Pet(JsonSchemaMixin):
 @dataclass
 class Cat(Pet):
     """A cat"""
+
     color: str
 
 
