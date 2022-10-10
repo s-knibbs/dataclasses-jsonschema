@@ -1,26 +1,38 @@
 import warnings
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
-from typing import cast, TypeVar, Generic, Optional
-from uuid import UUID
+from typing import Generic, Optional, TypeVar, cast
 
-from dateutil.parser import parse
+# Note, iso8601 vs rfc3339 is subtle. rfc3339 is stricter, roughly a subset of iso8601.
+# ciso8601 doesn’t support the entirety of the ISO 8601 spec, only a popular subset.
+try:
+    from ciso8601 import parse_datetime
+except ImportError:
+    from dateutil.parser import parse
 
-from .type_defs import JsonEncodable, JsonDict
+    parse_datetime = parse  # type: ignore
 
-T = TypeVar('T')
-OutType = TypeVar('OutType', bound=JsonEncodable)
+try:
+    from fastuuid import UUID
+except ImportError:
+    from uuid import UUID
+
+from .type_defs import JsonDict, JsonEncodable
+
+T = TypeVar("T")
+OutType = TypeVar("OutType", bound=JsonEncodable)
 
 
 class FieldEncoder(Generic[T, OutType]):
     """Base class for encoding fields to and from JSON encodable values"""
 
     def to_wire(self, value: T) -> OutType:
-        return cast(OutType, value)
+        # `cast` function call overhead adds up given how slow python is
+        return value  # type: ignore
 
     def to_python(self, value: OutType) -> T:
-        return cast(T, value)
+        return value  # type: ignore
 
     @property
     def json_schema(self) -> JsonDict:
@@ -28,13 +40,13 @@ class FieldEncoder(Generic[T, OutType]):
 
 
 class DateFieldEncoder(FieldEncoder[date, str]):
-    """Encodes dates to RFC3339 format"""
+    """Encodes dates to ISO8601 (compatible with RFC3339 subset) format"""
 
     def to_wire(self, value: date) -> str:
         return value.isoformat()
 
     def to_python(self, value: str) -> date:
-        return value if isinstance(value, date) else parse(cast(str, value)).date()
+        return value if isinstance(value, date) else parse_datetime(cast(str, value)).date()
 
     @property
     def json_schema(self) -> JsonDict:
@@ -42,7 +54,7 @@ class DateFieldEncoder(FieldEncoder[date, str]):
 
 
 class DateTimeFieldEncoder(FieldEncoder[datetime, str]):
-    """Encodes datetimes to RFC3339 format"""
+    """Encodes datetimes to ISO8601 (compatible with RFC3339 subset) format"""
 
     def to_wire(self, value: datetime) -> str:
         out = value.isoformat()
@@ -54,7 +66,7 @@ class DateTimeFieldEncoder(FieldEncoder[datetime, str]):
         return out
 
     def to_python(self, value: str) -> datetime:
-        return value if isinstance(value, datetime) else parse(cast(str, value))
+        return value if isinstance(value, datetime) else parse_datetime(cast(str, value))
 
     @property
     def json_schema(self) -> JsonDict:
@@ -63,11 +75,10 @@ class DateTimeFieldEncoder(FieldEncoder[datetime, str]):
 
 # Alias for backwards compat
 DateTimeField = DateTimeFieldEncoder
-UUID_REGEX = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+UUID_REGEX = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
 
 class UuidField(FieldEncoder[UUID, str]):
-
     def to_wire(self, value: UUID) -> str:
         return str(value)
 
@@ -75,16 +86,11 @@ class UuidField(FieldEncoder[UUID, str]):
         return UUID(value)
 
     @property
-    def json_schema(self):
-        return {
-            'type': 'string',
-            'format': 'uuid',
-            'pattern': UUID_REGEX
-        }
+    def json_schema(self) -> JsonDict:
+        return {"type": "string", "format": "uuid", "pattern": UUID_REGEX}
 
 
 class DecimalField(FieldEncoder[Decimal, float]):
-
     def __init__(self, precision: Optional[int] = None):
         self.precision = precision
 
@@ -95,15 +101,14 @@ class DecimalField(FieldEncoder[Decimal, float]):
         return Decimal(str(value))
 
     @property
-    def json_schema(self):
-        schema = {'type': 'number'}
+    def json_schema(self) -> JsonDict:
+        schema: JsonDict = {"type": "number"}
         if self.precision is not None and self.precision > 0:
-            schema['multipleOf'] = float('0.' + '0' * (self.precision - 1) + '1')
+            schema["multipleOf"] = float("0." + "0" * (self.precision - 1) + "1")
         return schema
 
 
 class IPv4AddressField(FieldEncoder[IPv4Address, str]):
-
     def to_wire(self, value: IPv4Address) -> str:
         return str(value)
 
@@ -111,12 +116,11 @@ class IPv4AddressField(FieldEncoder[IPv4Address, str]):
         return IPv4Address(value)
 
     @property
-    def json_schema(self):
-        return {'type': 'string', 'format': 'ipv4'}
+    def json_schema(self) -> JsonDict:
+        return {"type": "string", "format": "ipv4"}
 
 
 class IPv6AddressField(FieldEncoder[IPv6Address, str]):
-
     def to_wire(self, value: IPv6Address) -> str:
         return str(value)
 
@@ -124,5 +128,5 @@ class IPv6AddressField(FieldEncoder[IPv6Address, str]):
         return IPv6Address(value)
 
     @property
-    def json_schema(self):
-        return {'type': 'string', 'format': 'ipv6'}
+    def json_schema(self) -> JsonDict:
+        return {"type": "string", "format": "ipv6"}

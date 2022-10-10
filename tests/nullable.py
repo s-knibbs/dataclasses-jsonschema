@@ -3,6 +3,7 @@ This script is used to test if mypy understands that the Nullable type is always
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 from dataclasses_jsonschema.type_defs import Nullable

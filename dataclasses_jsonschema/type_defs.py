@@ -1,11 +1,11 @@
 from enum import Enum
-from typing import Union, Dict, Any, List, TypeVar
+from typing import Any, Dict, List, TypeVar, Union
 
 try:
     # Supported in future python versions
-    from typing import TypedDict, Literal  # type: ignore
+    from typing import Literal, TypedDict  # type: ignore
 except ImportError:
-    from typing_extensions import TypedDict, Literal  # type: ignore
+    from typing_extensions import Literal, TypedDict  # type: ignore
 
 
 JsonEncodable = Union[int, float, str, bool]
@@ -18,6 +18,7 @@ class JsonSchemaMeta(TypedDict, total=False):  # type: ignore
 
     >>> foo = field(metadata=JsonSchemaMeta(description="A foo that foos"))
     """
+
     description: str
     title: str
     examples: List
@@ -47,6 +48,7 @@ class _NULL_TYPE:
     """Sentinel value to represent null json values for nullable fields, to distinguish them from `None`
     for omitted fields.
     """
+
     def __bool__(self) -> Literal[False]:
         return False
 
@@ -55,3 +57,5 @@ NULL = _NULL_TYPE()
 
 T = TypeVar("T")
 Nullable = Union[T, _NULL_TYPE]
+
+NoneType = type(None)
