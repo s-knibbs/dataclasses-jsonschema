@@ -34,7 +34,7 @@ class Weekday(Enum):
     FRI = "Friday"
 
 
-@dataclass(eq=True)
+@dataclass(eq=True, frozen=True)
 class Point(SubSchemas):
     x: float = field(metadata=dict(description="Point x coordinate"))
     y: float = field(metadata=dict(description="Point y coordinate"))
