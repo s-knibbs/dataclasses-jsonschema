@@ -1063,6 +1063,30 @@ def test_tuple_item_schema():
     assert MapNote.json_schema()["properties"]["point"] == expected_tuple_schema
 
 
+def test_tuple_embedded_item_schema():
+    @dataclass
+    class MapNote(JsonSchemaMixin):
+        text: str
+
+    @dataclass
+    class Config(JsonSchemaMixin):
+        map_notes: Tuple[MapNote, ...]
+
+    expected_tuple_schema = {"type": "array", "items": {"$ref": "#/definitions/MapNote"}}
+    expected_definitions = {
+        "MapNote": {
+            "type": "object",
+            "required": ["text"],
+            "properties": {
+                "text": {"type": "string"}
+            },
+            "description": "MapNote(text: str)"
+        }
+    }
+    assert Config.json_schema()["definitions"] == expected_definitions
+    assert Config.json_schema()["properties"]["map_notes"] == expected_tuple_schema
+
+
 def test_union_issue_190():
     @dataclass
     class Config(JsonSchemaMixin):
