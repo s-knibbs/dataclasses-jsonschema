@@ -521,8 +521,8 @@ class JsonSchemaMixin:
 
     @classmethod
     def _decode_field(cls, field: str, field_type: Any, value: Any) -> Any:
-        if value is None:
-            return NULL if is_nullable(field_type) else None
+        if value is None and is_nullable(field_type):
+            return None
         decoder = None
         try:
             decoder = cls.__decode_cache[field_type]  # type: ignore
