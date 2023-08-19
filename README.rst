@@ -7,11 +7,7 @@ Dataclasses JSON Schema
 .. image:: https://badge.fury.io/py/dataclasses-jsonschema.svg
     :target: https://badge.fury.io/py/dataclasses-jsonschema
 
-.. image:: https://img.shields.io/lgtm/grade/python/g/s-knibbs/dataclasses-jsonschema.svg?logo=lgtm&logoWidth=18
-    :target: https://lgtm.com/projects/g/s-knibbs/dataclasses-jsonschema/context:python
-    :alt:    Language grade: Python
-
-**Please Note:** This project is in maintenance mode. I'm currently only making urgent bugfixes.
+**⚠️Please Note⚠️:** **Because of health reasons I'm not longer able to make changes to this project or make further releases via PyPI.**
 
 A library to generate JSON Schema from python 3.7 dataclasses. Python 3.6 is supported through the `dataclasses backport <https://github.com/ericvsmith/dataclasses>`_. Aims to be a more lightweight alternative to similar projects such as `marshmallow <https://github.com/marshmallow-code/marshmallow>`_ & `pydantic <https://github.com/samuelcolvin/pydantic>`_.
 
